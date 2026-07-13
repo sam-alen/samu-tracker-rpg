@@ -17,6 +17,7 @@ import { fx } from '../../lib/fx';
 import { checkAchievements, computeStats, getClosestAchievement } from '../../lib/achievements';
 import { pendingTemplatesForToday, instantiateTemplates } from '../../lib/missions';
 import { getRank, getNextRank, getStreakTitle, getTotalXP, getRankProgress } from '../../lib/titles';
+import { computeHunterPower, getHunterRank, getNextHunterRank, getHunterRankProgress } from '../../lib/hunterRank';
 import {
   ATTRIBUTES, ATTRIBUTE_COLORS, ATTRIBUTE_ICONS,
   applyAttributeXP, defaultAttributes, defaultAttributeXP, totalAttributePoints, getAttributeTier,
@@ -82,6 +83,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
   const streakTitle = getStreakTitle(xp.streak);
   const rankProgress = getRankProgress(xp.level);
   const totalXP = getTotalXP(xp);
+
+  // ─── Hunter rank (Solo Leveling style E→S) ─────────────────────────────────
+  const hunterPower = computeHunterPower(totalXP, totalAttributePoints(attributes), unlockedAchievements.length);
+  const hunterRank = getHunterRank(hunterPower);
+  const nextHunterRank = getNextHunterRank(hunterPower);
+  const hunterProgress = getHunterRankProgress(hunterPower);
 
   // ─── Today stats ───────────────────────────────────────────────────────────
   const habitsToday = useMemo(() => ({
@@ -280,6 +287,14 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
               <Zap size={9} className="text-[#03101F]" />
               <span className="text-xs font-bold text-[#03101F] leading-none">{xp.level}</span>
             </div>
+            {/* Hunter rank badge (Solo Leveling style E→S) */}
+            <div
+              title={hunterRank.title}
+              className="absolute -top-2 -left-2 w-6 h-6 rounded-md flex items-center justify-center font-display font-bold text-sm"
+              style={{ color: hunterRank.color, backgroundColor: `${hunterRank.color}26`, border: `1.5px solid ${hunterRank.color}`, boxShadow: `0 0 8px ${hunterRank.color}66` }}
+            >
+              {hunterRank.letter}
+            </div>
           </div>
 
           {/* Name + rank */}
@@ -291,6 +306,17 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className="text-sm">{rank.badge}</span>
               <span className={`font-display text-sm font-bold uppercase tracking-wider ${rank.textColor}`}>{rank.title}</span>
+            </div>
+
+            {/* Hunter rank */}
+            <div className="flex items-center gap-1.5 mt-1">
+              <span
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                style={{ color: hunterRank.color, backgroundColor: `${hunterRank.color}26`, border: `1px solid ${hunterRank.color}66` }}
+              >
+                RANGO {hunterRank.letter}
+              </span>
+              <span className="text-xs text-gray-500">{hunterRank.title}</span>
             </div>
 
             {/* Streak title */}
@@ -338,7 +364,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
         {nextRank && (
           <div className="mt-3 pt-3 border-t border-white/5">
             <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="text-gray-600">Progreso de rango</span>
+              <span className="text-gray-600">Progreso de título</span>
               <div className="flex items-center gap-1 text-gray-500">
                 <span>→</span>
                 <span className={nextRank.textColor}>{nextRank.badge} {nextRank.title}</span>
@@ -357,6 +383,32 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
             </p>
           </div>
         )}
+
+        {/* Hunter rank progress (Solo Leveling style, composite of XP + atributos + logros) */}
+        <div className="mt-3 pt-3 border-t border-white/5">
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <span className="text-gray-600">Progreso de Cazador</span>
+            {nextHunterRank ? (
+              <div className="flex items-center gap-1 text-gray-500">
+                <span>→</span>
+                <span style={{ color: nextHunterRank.color }}>Rango {nextHunterRank.letter}</span>
+              </div>
+            ) : (
+              <span className="text-gray-500">Rango máximo</span>
+            )}
+          </div>
+          <div className="w-full h-1 bg-black/30 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{ width: `${hunterProgress.pct}%`, background: `linear-gradient(to right, ${hunterRank.color}, ${nextHunterRank?.color ?? hunterRank.color})`, boxShadow: `0 0 6px ${hunterRank.color}66` }}
+            />
+          </div>
+          <p className="text-xs text-gray-700 mt-1">
+            {nextHunterRank
+              ? `${hunterPower.toLocaleString()} pts de poder · ${hunterProgress.pointsToNext.toLocaleString()} para Rango ${nextHunterRank.letter}`
+              : `${hunterPower.toLocaleString()} pts de poder · trascendiste la clasificación`}
+          </p>
+        </div>
       </div>
 
       {/* ── Attributes ───────────────────────────────────────────────────── */}
