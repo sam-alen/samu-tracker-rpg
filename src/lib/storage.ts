@@ -28,6 +28,7 @@ const KEYS = {
   recommendationInteractions: 'rpg_recommendation_interactions',
   recommendationAffinity: 'rpg_recommendation_affinity',
   recommendationWeeklyPlan: 'rpg_recommendation_weekly_plan',
+  backupReminder: 'rpg_backup_reminder',
 } as const;
 
 function get<T>(key: string, fallback: T): T {
@@ -142,6 +143,9 @@ export const storage = {
   getRecommendationWeeklyPlan: () => get<AppState['recommendationWeeklyPlan']>(KEYS.recommendationWeeklyPlan, null),
   setRecommendationWeeklyPlan: (v: AppState['recommendationWeeklyPlan']) => set(KEYS.recommendationWeeklyPlan, v),
 
+  getBackupReminder: () => get<AppState['backupReminder']>(KEYS.backupReminder, { lastExportAt: null, lastDismissedAt: null }),
+  setBackupReminder: (v: AppState['backupReminder']) => set(KEYS.backupReminder, v),
+
   exportAll(): string {
     const data: AppState = {
       profile: this.getProfile(),
@@ -168,6 +172,7 @@ export const storage = {
       recommendationInteractions: this.getRecommendationInteractions(),
       recommendationAffinity: this.getRecommendationAffinity(),
       recommendationWeeklyPlan: this.getRecommendationWeeklyPlan(),
+      backupReminder: this.getBackupReminder(),
     };
     return JSON.stringify(data, null, 2);
   },
@@ -198,6 +203,7 @@ export const storage = {
     if (data.recommendationInteractions) this.setRecommendationInteractions(data.recommendationInteractions);
     if (data.recommendationAffinity) this.setRecommendationAffinity(data.recommendationAffinity);
     if (data.recommendationWeeklyPlan) this.setRecommendationWeeklyPlan(data.recommendationWeeklyPlan);
+    if (data.backupReminder) this.setBackupReminder(data.backupReminder);
   },
 
   clearAll(): void {

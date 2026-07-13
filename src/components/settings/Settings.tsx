@@ -29,6 +29,7 @@ export function Settings() {
     a.download = `samu-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    storage.setBackupReminder({ ...storage.getBackupReminder(), lastExportAt: new Date().toISOString() });
   }
 
   function importData(e: React.ChangeEvent<HTMLInputElement>) {

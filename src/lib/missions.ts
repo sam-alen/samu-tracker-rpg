@@ -25,5 +25,30 @@ export function instantiateTemplates(templates: MissionTemplate[], today: string
     status: 'pending' as const,
     createdAt: today,
     templateId: t.id,
+    difficulty: t.difficulty,
+    estimatedDays: t.estimatedDays,
   }));
+}
+
+/** Daily missions: the ones that reset with `date`, shown only for `today`. */
+export function dailyMissionsFor(missions: Mission[], today: string): Mission[] {
+  return missions.filter(m => m.date === today && !m.special);
+}
+
+/** Special missions: persist regardless of `date` until completed. Pending
+ *  ones are shown first (soonest deadline first), then completed ones. */
+export function activeSpecialMissions(missions: Mission[]): Mission[] {
+  return missions
+    .filter(m => m.special)
+    .sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
+      if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+      if (a.deadline) return -1;
+      if (b.deadline) return 1;
+      return a.createdAt.localeCompare(b.createdAt);
+    });
+}
+
+export function daysUntil(deadline: string, today: string): number {
+  return Math.round((new Date(deadline + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 86400000);
 }

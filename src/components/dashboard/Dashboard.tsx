@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Flame, Zap, Trophy, BookOpen, Wallet, ShieldCheck,
   Target, User, TrendingUp, ChevronRight, Star, Coins, Check, Sparkles, Repeat,
-  ChevronLeft, ChevronRight as ChevronRightIcon, Calendar,
+  ChevronLeft, ChevronRight as ChevronRightIcon, Calendar, DatabaseBackup, X,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -15,9 +15,11 @@ import { storage } from '../../lib/storage';
 import { todayISO, XP_REWARDS } from '../../lib/xp';
 import { fx } from '../../lib/fx';
 import { checkAchievements, computeStats, getClosestAchievement } from '../../lib/achievements';
-import { pendingTemplatesForToday, instantiateTemplates } from '../../lib/missions';
+import { pendingTemplatesForToday, instantiateTemplates, dailyMissionsFor } from '../../lib/missions';
+import { missionXPReward } from '../../lib/missionDifficulty';
 import { getRank, getNextRank, getStreakTitle, getTotalXP, getRankProgress } from '../../lib/titles';
 import { computeHunterPower, getHunterRank, getNextHunterRank, getHunterRankProgress } from '../../lib/hunterRank';
+import { shouldShowBackupReminder } from '../../lib/backupReminder';
 import {
   ATTRIBUTES, ATTRIBUTE_COLORS, ATTRIBUTE_ICONS,
   applyAttributeXP, defaultAttributes, defaultAttributeXP, totalAttributePoints, getAttributeTier,
@@ -73,6 +75,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
   const [rewards] = useLocalStorage<Reward[]>(storage.keys.rewards, []);
   const [financeAccounts] = useLocalStorage<FinanceAccounts>(storage.keys.financeAccounts, { account: 0, savings: 0, history: [] });
   const [unlockedAchievements] = useLocalStorage<string[]>(storage.keys.unlockedAchievements, []);
+  const [backupReminder, setBackupReminder] = useLocalStorage(storage.keys.backupReminder, storage.getBackupReminder());
 
   const today = todayISO();
   const last7 = useMemo(() => getLast7Days(), []);
@@ -83,6 +86,25 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
   const streakTitle = getStreakTitle(xp.streak);
   const rankProgress = getRankProgress(xp.level);
   const totalXP = getTotalXP(xp);
+
+  // ─── Backup reminder ────────────────────────────────────────────────────────
+  const showBackupReminder = shouldShowBackupReminder(backupReminder, totalXP);
+
+  function exportBackupNow() {
+    const json = storage.exportAll();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `samu-tracker-backup-${todayISO()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setBackupReminder({ ...backupReminder, lastExportAt: new Date().toISOString() });
+  }
+
+  function dismissBackupReminder() {
+    setBackupReminder({ ...backupReminder, lastDismissedAt: new Date().toISOString() });
+  }
 
   // ─── Hunter rank (Solo Leveling style E→S) ─────────────────────────────────
   const hunterPower = computeHunterPower(totalXP, totalAttributePoints(attributes), unlockedAchievements.length);
@@ -210,38 +232,45 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
     }
   }
 
+  // Mirrors Missions.tsx's toggle() — kept in sync: reward scales with
+  // difficulty, the actual granted amount is stored on the mission
+  // (xpAwarded) so reverting never desyncs from a later difficulty edit,
+  // and the all-done bonus only considers daily (non-special) missions.
   function toggleMission(id: string, e?: React.MouseEvent) {
     const mission = missions.find(m => m.id === id);
     if (!mission) return;
     const nowDone = mission.status !== 'done';
-    const todayBefore = missions.filter(m => m.date === today);
-    const wasAllDone = todayBefore.length > 0 && todayBefore.every(m => m.status === 'done');
+    const dailyBefore = dailyMissionsFor(missions, today);
+    const wasAllDone = dailyBefore.length > 0 && dailyBefore.every(m => m.status === 'done');
+    const reward = nowDone ? missionXPReward(mission.difficulty) : (mission.xpAwarded ?? missionXPReward(mission.difficulty));
     const updated = missions.map(m => m.id === id
-      ? { ...m, status: nowDone ? 'done' as const : 'pending' as const }
+      ? { ...m, status: nowDone ? 'done' as const : 'pending' as const, xpAwarded: nowDone ? reward : undefined }
       : m);
     setMissions(updated);
     if (nowDone) {
-      gainXP(XP_REWARDS.mission);
-      gainAttribute(mission.attribute ?? 'DEX', XP_REWARDS.mission);
-      fx.rewardAt(e ?? null, XP_REWARDS.mission);
+      gainXP(reward);
+      gainAttribute(mission.attribute ?? 'DEX', reward);
+      fx.rewardAt(e ?? null, reward);
       checkAchievements();
-      const todayUpdated = updated.filter(m => m.date === today);
-      if (todayUpdated.length > 0 && todayUpdated.every(m => m.status === 'done')) {
-        gainXP(XP_REWARDS.allMissionsBonus);
-        fx.emit({
-          kind: 'banner',
-          title: 'Misiones diarias completadas',
-          subtitle: `+${XP_REWARDS.allMissionsBonus} XP de bonus por limpiar el día`,
-        });
+      if (!mission.special) {
+        const dailyUpdated = dailyMissionsFor(updated, today);
+        if (dailyUpdated.length > 0 && dailyUpdated.every(m => m.status === 'done')) {
+          gainXP(XP_REWARDS.allMissionsBonus);
+          fx.emit({
+            kind: 'banner',
+            title: 'Misiones diarias completadas',
+            subtitle: `+${XP_REWARDS.allMissionsBonus} XP de bonus por limpiar el día`,
+          });
+        }
       }
     } else {
-      loseXP(XP_REWARDS.mission);
-      gainAttribute(mission.attribute ?? 'DEX', -XP_REWARDS.mission);
-      if (wasAllDone) loseXP(XP_REWARDS.allMissionsBonus);
+      loseXP(reward);
+      gainAttribute(mission.attribute ?? 'DEX', -reward);
+      if (!mission.special && wasAllDone) loseXP(XP_REWARDS.allMissionsBonus);
     }
   }
 
-  const todayMissionList = useMemo(() => missions.filter(m => m.date === today), [missions, today]);
+  const todayMissionList = useMemo(() => dailyMissionsFor(missions, today), [missions, today]);
   const pendingTemplates = useMemo(
     () => pendingTemplatesForToday(missionTemplates, missions, today),
     [missionTemplates, missions, today],
@@ -410,6 +439,25 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
           </p>
         </div>
       </div>
+
+      {/* ── Backup reminder ─────────────────────────────────────────────── */}
+      {showBackupReminder && (
+        <div className="card-ornate rounded-xl p-4 flex items-center gap-3">
+          <DatabaseBackup size={18} className="text-arcane-300 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white">
+              {backupReminder.lastExportAt ? 'Hace tiempo que no exportas un backup' : 'Nunca has exportado un backup de tus datos'}
+            </p>
+            <p className="text-xs text-gray-500">
+              Todo vive solo en este navegador — un respaldo periódico te protege de perderlo todo.
+            </p>
+          </div>
+          <Button variant="primary" size="sm" onClick={exportBackupNow}>Exportar ahora</Button>
+          <button onClick={dismissBackupReminder} className="p-1.5 text-gray-600 hover:text-gray-300 transition-colors shrink-0" title="Recordar más tarde">
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* ── Attributes ───────────────────────────────────────────────────── */}
       <AttributesCard attributes={attributes} attributeXP={attributeXP} />
@@ -607,7 +655,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
                     <span className={`flex-1 text-xs font-medium ${done ? 'text-arcane-300 line-through opacity-70' : 'text-gray-300'}`}>
                       {m.title}
                     </span>
-                    <span className="text-[10px] text-gold-400/80 font-semibold shrink-0">+{XP_REWARDS.mission}</span>
+                    <span className="text-[10px] text-gold-400/80 font-semibold shrink-0">+{missionXPReward(m.difficulty)}</span>
                   </button>
                 );
               })}

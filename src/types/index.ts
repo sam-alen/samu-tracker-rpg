@@ -65,16 +65,34 @@ export interface Habit {
 
 export type MissionStatus = 'pending' | 'done';
 
+/** Difficulty ladder — the top two tiers double as "boss fight" / "dungeon"
+ *  framing for genuinely demanding, multi-session missions. Drives the XP
+ *  (and therefore attribute XP) multiplier via lib/missionDifficulty.ts. */
+export type MissionDifficulty = 'facil' | 'normal' | 'dificil' | 'epica' | 'boss' | 'mazmorra';
+
 export interface Mission {
   id: string;
   title: string;
-  date: string; // YYYY-MM-DD – the day this mission belongs to
+  date: string; // YYYY-MM-DD – the day this mission belongs to (creation day for special missions)
   status: MissionStatus;
   createdAt: string;
   /** May be missing in old saves — default to a fallback attribute when reading */
   attribute?: RPGAttribute;
   /** Present if this instance was generated from a MissionTemplate */
   templateId?: string;
+  /** Missing in old saves — defaults to 'normal' when reading */
+  difficulty?: MissionDifficulty;
+  /** Purely informational estimate of effort, in days */
+  estimatedDays?: number;
+  /** true = doesn't reset with `date` — lives in "Misiones especiales" until
+   *  completed or past its deadline, instead of only appearing "today" */
+  special?: boolean;
+  /** Optional deadline for special missions, ISO date (YYYY-MM-DD) */
+  deadline?: string;
+  /** Actual XP granted when marked done — reverting always uses this exact
+   *  stored amount (not a recompute from the mission's *current* difficulty),
+   *  so editing difficulty after completion can never desync gain/undo. */
+  xpAwarded?: number;
 }
 
 /** A recurring mission definition. Each active day, a Mission instance is
@@ -86,6 +104,8 @@ export interface MissionTemplate {
   attribute?: RPGAttribute;
   active: boolean;
   createdAt: string;
+  difficulty?: MissionDifficulty;
+  estimatedDays?: number;
 }
 
 // ─── Study ──────────────────────────────────────────────────────────────────
@@ -430,6 +450,15 @@ export interface SavedLink {
   createdAt: string;
 }
 
+// ─── Backup reminder ───────────────────────────────────────────────────────────
+
+export interface BackupReminderState {
+  /** ISO datetime of the last time the user exported a backup, or null if never */
+  lastExportAt: string | null;
+  /** ISO datetime the reminder banner was last dismissed, or null if never shown/dismissed */
+  lastDismissedAt: string | null;
+}
+
 // ─── Full App State ───────────────────────────────────────────────────────────
 
 export interface AppState {
@@ -457,4 +486,5 @@ export interface AppState {
   recommendationWeeklyPlan: RecommendationWeeklyPlan | null;
   savedLinks: SavedLink[];
   unlockedAchievements: string[];
+  backupReminder: BackupReminderState;
 }
