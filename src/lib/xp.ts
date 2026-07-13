@@ -57,15 +57,25 @@ export function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function yesterdayISO(): string {
+function daysAgoISO(n: number): string {
   const d = new Date();
-  d.setDate(d.getDate() - 1);
+  d.setDate(d.getDate() - n);
   return d.toISOString().slice(0, 10);
 }
 
+/** Streaks of at least this length survive ONE missed day (grace bridge) —
+ *  a single bad day shouldn't wipe out weeks of consistency. */
+export const STREAK_GRACE_MIN = 7;
+
 /** Called on every reward-granting action. Bumps the streak only on the
  *  day's first action; every action after that just increments the
- *  same-day counter (actionsToday) so a partial undo doesn't touch it. */
+ *  same-day counter (actionsToday) so a partial undo doesn't touch it.
+ *
+ *  Grace rule: a streak >= STREAK_GRACE_MIN also continues across a single
+ *  missed day. This is stateless (no consumable counter), which keeps
+ *  revertStreak exactly symmetric with zero new fields — the documented
+ *  trade-off is that a >=7 streak could technically be kept alive on
+ *  alternating days, accepted for a personal self-honesty app. */
 export function updateStreak(state: XPState): XPState {
   const today = todayISO();
 
@@ -73,7 +83,9 @@ export function updateStreak(state: XPState): XPState {
     return { ...state, actionsToday: (state.actionsToday ?? 1) + 1 };
   }
 
-  const streak = state.lastActiveDate === yesterdayISO() ? state.streak + 1 : 1;
+  const continues = state.lastActiveDate === daysAgoISO(1)
+    || (state.streak >= STREAK_GRACE_MIN && state.lastActiveDate === daysAgoISO(2));
+  const streak = continues ? state.streak + 1 : 1;
   return {
     ...state,
     streak,

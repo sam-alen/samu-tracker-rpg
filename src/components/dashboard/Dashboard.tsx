@@ -16,7 +16,8 @@ import { todayISO, XP_REWARDS } from '../../lib/xp';
 import { fx } from '../../lib/fx';
 import { checkAchievements, computeStats, getClosestAchievement } from '../../lib/achievements';
 import { pendingTemplatesForToday, instantiateTemplates, dailyMissionsFor } from '../../lib/missions';
-import { missionXPReward } from '../../lib/missionDifficulty';
+import { missionXPReward, getMissionDifficulty } from '../../lib/missionDifficulty';
+import { STREAK_GRACE_MIN } from '../../lib/xp';
 import { getRank, getNextRank, getStreakTitle, getTotalXP, getRankProgress } from '../../lib/titles';
 import { computeHunterPower, getHunterRank, getNextHunterRank, getHunterRankProgress } from '../../lib/hunterRank';
 import { shouldShowBackupReminder } from '../../lib/backupReminder';
@@ -389,56 +390,151 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
           </div>
         </div>
 
-        {/* Rank progress toward next rank */}
-        {nextRank && (
-          <div className="mt-3 pt-3 border-t border-white/5">
-            <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="text-gray-600">Progreso de título</span>
-              <div className="flex items-center gap-1 text-gray-500">
-                <span>→</span>
-                <span className={nextRank.textColor}>{nextRank.badge} {nextRank.title}</span>
-                <span className="text-gray-700">(Lv. {nextRank.minLevel})</span>
+        {/* Rank progress toward next title + next Hunter Rank, side by side */}
+        <div className="mt-3 pt-3 border-t border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+          {nextRank && (
+            <div title={`Nivel ${xp.level} de ${nextRank.minLevel - 1} en este rango`}>
+              <div className="flex items-center justify-between text-[11px] mb-1">
+                <span className="text-gray-600">Título</span>
+                <span className={nextRank.textColor}>→ {nextRank.title}</span>
+              </div>
+              <div className="w-full h-1.5 bg-black/30 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]">
+                <div
+                  className="h-full rounded-full transition-all duration-700 bg-gradient-to-r from-arcane-600 to-gold-400 shadow-[0_0_6px_rgba(77,166,255,0.4)]"
+                  style={{ width: `${rankProgress.pct}%` }}
+                />
               </div>
             </div>
-            <div className="w-full h-1 bg-black/30 rounded-full overflow-hidden">
+          )}
+
+          <div title={`${hunterPower.toLocaleString()} pts de poder`}>
+            <div className="flex items-center justify-between text-[11px] mb-1">
+              <span className="text-gray-600">Cazador</span>
+              {nextHunterRank ? (
+                <span style={{ color: nextHunterRank.color }}>→ Rango {nextHunterRank.letter}</span>
+              ) : (
+                <span className="text-gray-500">Rango máximo</span>
+              )}
+            </div>
+            <div className="w-full h-1.5 bg-black/30 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]">
               <div
-                className="h-full rounded-full transition-all duration-700 bg-gradient-to-r from-arcane-600 to-gold-400 shadow-[0_0_6px_rgba(77,166,255,0.4)]"
-                style={{ width: `${rankProgress.pct}%` }}
+                className="h-full rounded-full transition-all duration-700"
+                style={{ width: `${hunterProgress.pct}%`, background: `linear-gradient(to right, ${hunterRank.color}, ${nextHunterRank?.color ?? hunterRank.color})`, boxShadow: `0 0 6px ${hunterRank.color}66` }}
               />
             </div>
-            <p className="text-xs text-gray-700 mt-1">
-              Nivel {xp.level} de {nextRank.minLevel - 1} en este rango
-              · {nextRank.minLevel - xp.level} nivel{nextRank.minLevel - xp.level !== 1 ? 'es' : ''} para siguiente rango
-            </p>
           </div>
-        )}
-
-        {/* Hunter rank progress (Solo Leveling style, composite of XP + atributos + logros) */}
-        <div className="mt-3 pt-3 border-t border-white/5">
-          <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="text-gray-600">Progreso de Cazador</span>
-            {nextHunterRank ? (
-              <div className="flex items-center gap-1 text-gray-500">
-                <span>→</span>
-                <span style={{ color: nextHunterRank.color }}>Rango {nextHunterRank.letter}</span>
-              </div>
-            ) : (
-              <span className="text-gray-500">Rango máximo</span>
-            )}
-          </div>
-          <div className="w-full h-1 bg-black/30 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-700"
-              style={{ width: `${hunterProgress.pct}%`, background: `linear-gradient(to right, ${hunterRank.color}, ${nextHunterRank?.color ?? hunterRank.color})`, boxShadow: `0 0 6px ${hunterRank.color}66` }}
-            />
-          </div>
-          <p className="text-xs text-gray-700 mt-1">
-            {nextHunterRank
-              ? `${hunterPower.toLocaleString()} pts de poder · ${hunterProgress.pointsToNext.toLocaleString()} para Rango ${nextHunterRank.letter}`
-              : `${hunterPower.toLocaleString()} pts de poder · trascendiste la clasificación`}
-          </p>
         </div>
       </div>
+
+      {/* ── Today's habits chips ────────────────────────────────────────── */}
+      <Card>
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <p className="text-sm font-medium text-white whitespace-nowrap">Hábitos de hoy</p>
+          <div className="w-28 shrink-0">
+            <ProgressBar
+              value={habitsToday.total > 0 ? (habitsToday.done / habitsToday.total) * 100 : 0}
+              color="green"
+              height="sm"
+            />
+          </div>
+        </div>
+        {habits.length === 0
+          ? <p className="text-xs text-gray-600">Sin hábitos creados.</p>
+          : (
+            <div className="flex flex-wrap gap-2">
+              {habits.map(h => {
+                const done = h.completedDates.includes(today);
+                const attrColor = ATTRIBUTE_COLORS[h.attribute ?? 'INT'];
+                return (
+                  <button
+                    key={h.id}
+                    onClick={e => toggleHabit(h.id, e)}
+                    title={done ? 'Desmarcar' : `Completar (+${XP_REWARDS.habit} XP)`}
+                    className={`text-xs pl-2 pr-2.5 py-1.5 rounded-lg border transition-all active:scale-95 inline-flex items-center gap-1.5
+                      ${done
+                        ? 'bg-emerald-900/25 border-emerald-700/50 text-emerald-300 shadow-[0_0_8px_rgba(52,192,139,0.2)]'
+                        : 'bg-gray-800/40 border-gray-700/40 text-gray-400 hover:border-gold-400/40 hover:text-gray-200'
+                      }`}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ background: done ? '#34C08B' : attrColor, boxShadow: `0 0 4px ${done ? '#34C08B' : attrColor}99` }}
+                    />
+                    {done && <Check size={10} className="-mr-0.5" />}
+                    {h.icon} {h.name}
+                  </button>
+                );
+              })}
+            </div>
+          )
+        }
+        <p className="text-[10px] text-gray-700 mt-2.5">Toca un hábito para completarlo · +{XP_REWARDS.habit} XP</p>
+      </Card>
+
+      {pendingTemplates.length > 0 && (
+        <div className="card-ornate rounded-xl p-4 flex items-center gap-3">
+          <Repeat size={16} className="text-arcane-300 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white">
+              {pendingTemplates.length} misión{pendingTemplates.length !== 1 ? 'es' : ''} recurrente{pendingTemplates.length !== 1 ? 's' : ''} para hoy
+            </p>
+          </div>
+          <Button variant="primary" size="sm" onClick={addPendingTemplatesToday}>Agregar</Button>
+        </div>
+      )}
+
+      {/* ── Today's missions (quick actions) ────────────────────────────── */}
+      <Card>
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <p className="text-sm font-medium text-white whitespace-nowrap">Misiones de hoy</p>
+          <span className="text-xs text-gray-500">{missionsToday.done}/{missionsToday.total}</span>
+        </div>
+        {todayMissionList.length === 0
+          ? <p className="text-xs text-gray-600">Sin misiones para hoy. Créalas en la sección Misiones.</p>
+          : (
+            <div className="space-y-1.5">
+              {todayMissionList.map(m => {
+                const done = m.status === 'done';
+                const attrColor = ATTRIBUTE_COLORS[m.attribute ?? 'DEX'];
+                const diff = getMissionDifficulty(m.difficulty);
+                return (
+                  <button
+                    key={m.id}
+                    onClick={e => toggleMission(m.id, e)}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all active:scale-[0.99]
+                      ${done ? 'bg-emerald-950/15' : 'bg-[#0F1830] hover:brightness-110'}`}
+                    style={{
+                      borderLeft: `3px solid ${done ? '#34C08B' : attrColor}`,
+                      borderTop: `1px solid ${done ? 'rgba(52,192,139,0.18)' : '#1B2A47'}`,
+                      borderRight: `1px solid ${done ? 'rgba(52,192,139,0.18)' : '#1B2A47'}`,
+                      borderBottom: `1px solid ${done ? 'rgba(52,192,139,0.18)' : '#1B2A47'}`,
+                    }}
+                  >
+                    <span
+                      className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-all"
+                      style={{ border: `1.5px solid ${done ? '#34C08B' : '#2B4066'}`, background: done ? '#34C08B' : 'transparent' }}
+                    >
+                      {done && <Check size={11} className="text-[#03101F]" strokeWidth={3} />}
+                    </span>
+                    <span className={`flex-1 text-xs font-medium ${done ? 'text-emerald-300/70 line-through' : 'text-gray-300'}`}>
+                      {m.title}
+                    </span>
+                    {m.difficulty && m.difficulty !== 'normal' && (
+                      <span
+                        className="text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 flex items-center gap-1"
+                        style={{ color: diff.color, backgroundColor: `${diff.color}1F`, border: `1px solid ${diff.color}55` }}
+                      >
+                        <diff.icon size={9} />{diff.label}
+                      </span>
+                    )}
+                    <span className={`text-[10px] font-semibold shrink-0 ${done ? 'text-emerald-400' : 'text-gold-400/80'}`}>+{missionXPReward(m.difficulty)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )
+        }
+      </Card>
 
       {/* ── Backup reminder ─────────────────────────────────────────────── */}
       {showBackupReminder && (
@@ -531,17 +627,21 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
         <div className="flex justify-between gap-1 mb-3">
           {[...habitConsistency].reverse().map(d => (
             <div key={d.date} className="flex flex-col items-center gap-1.5 flex-1">
-              <div className={`w-full max-w-[32px] h-7 rounded-md flex items-center justify-center transition-all
-                ${d.isToday
-                  ? d.done
-                    ? 'bg-emerald-600/80 border border-emerald-500/60'
-                    : 'bg-gold-900/40 border border-gold-600/40'
-                  : d.done
-                    ? 'bg-emerald-900/50 border border-emerald-800/40'
-                    : 'bg-gray-800/60 border border-gray-700/30'
-                }`}
+              <div
+                className="w-full max-w-[32px] h-7 rounded-md flex items-center justify-center transition-all"
+                style={d.done
+                  ? {
+                      background: d.isToday ? 'linear-gradient(180deg, #6EE0B4, #34C08B)' : 'linear-gradient(180deg, rgba(52,192,139,0.55), rgba(52,192,139,0.3))',
+                      border: '1px solid rgba(52,192,139,0.6)',
+                      boxShadow: d.isToday ? '0 0 10px rgba(52,192,139,0.45)' : '0 0 6px rgba(52,192,139,0.15)',
+                    }
+                  : {
+                      background: '#131C2E',
+                      border: d.isToday ? '1px solid rgba(77,166,255,0.5)' : '1px solid #1B2A47',
+                      boxShadow: d.isToday ? '0 0 8px rgba(77,166,255,0.25)' : 'none',
+                    }}
               >
-                <span className="text-xs">{d.done ? '✓' : '·'}</span>
+                {d.done && <Check size={12} className={d.isToday ? 'text-[#03101F]' : 'text-emerald-300'} />}
               </div>
               <span className={`text-xs ${d.isToday ? 'text-gold-300 font-semibold' : 'text-gray-600'}`}>
                 {d.label}
@@ -573,96 +673,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
 
       {/* ── Streak milestones ───────────────────────────────────────────── */}
       <StreakMilestones streak={xp.streak} />
-
-      {/* ── Today's habits chips ────────────────────────────────────────── */}
-      <Card>
-        <div className="flex items-center justify-between gap-4 mb-3">
-          <p className="text-sm font-medium text-white whitespace-nowrap">Hábitos de hoy</p>
-          <div className="w-28 shrink-0">
-            <ProgressBar
-              value={habitsToday.total > 0 ? (habitsToday.done / habitsToday.total) * 100 : 0}
-              color="green"
-              height="sm"
-            />
-          </div>
-        </div>
-        {habits.length === 0
-          ? <p className="text-xs text-gray-600">Sin hábitos creados.</p>
-          : (
-            <div className="flex flex-wrap gap-2">
-              {habits.map(h => {
-                const done = h.completedDates.includes(today);
-                return (
-                  <button
-                    key={h.id}
-                    onClick={e => toggleHabit(h.id, e)}
-                    title={done ? 'Desmarcar' : `Completar (+${XP_REWARDS.habit} XP)`}
-                    className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all active:scale-95
-                      ${done
-                        ? 'bg-emerald-900/25 border-emerald-700/50 text-emerald-300 shadow-[0_0_6px_rgba(52,192,139,0.15)]'
-                        : 'bg-gray-800/40 border-gray-700/40 text-gray-400 hover:border-gold-400/40 hover:text-gray-200'
-                      }`}
-                  >
-                    {done && <Check size={10} className="inline mr-1 -mt-0.5" />}
-                    {h.icon} {h.name}
-                  </button>
-                );
-              })}
-            </div>
-          )
-        }
-        <p className="text-[10px] text-gray-700 mt-2.5">Toca un hábito para completarlo · +{XP_REWARDS.habit} XP</p>
-      </Card>
-
-      {pendingTemplates.length > 0 && (
-        <div className="card-ornate rounded-xl p-4 flex items-center gap-3">
-          <Repeat size={16} className="text-arcane-300 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white">
-              {pendingTemplates.length} misión{pendingTemplates.length !== 1 ? 'es' : ''} recurrente{pendingTemplates.length !== 1 ? 's' : ''} para hoy
-            </p>
-          </div>
-          <Button variant="primary" size="sm" onClick={addPendingTemplatesToday}>Agregar</Button>
-        </div>
-      )}
-
-      {/* ── Today's missions (quick actions) ────────────────────────────── */}
-      <Card>
-        <div className="flex items-center justify-between gap-4 mb-3">
-          <p className="text-sm font-medium text-white whitespace-nowrap">Misiones de hoy</p>
-          <span className="text-xs text-gray-500">{missionsToday.done}/{missionsToday.total}</span>
-        </div>
-        {todayMissionList.length === 0
-          ? <p className="text-xs text-gray-600">Sin misiones para hoy. Créalas en la sección Misiones.</p>
-          : (
-            <div className="space-y-1.5">
-              {todayMissionList.map(m => {
-                const done = m.status === 'done';
-                return (
-                  <button
-                    key={m.id}
-                    onClick={e => toggleMission(m.id, e)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-all active:scale-[0.99]
-                      ${done
-                        ? 'bg-arcane-900/20 border-arcane-700/30'
-                        : 'bg-gray-800/30 border-gray-700/40 hover:border-gold-400/40'
-                      }`}
-                  >
-                    <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all
-                      ${done ? 'bg-arcane-600 border-arcane-400' : 'border-gray-600'}`}>
-                      {done && <Check size={11} className="text-white" />}
-                    </span>
-                    <span className={`flex-1 text-xs font-medium ${done ? 'text-arcane-300 line-through opacity-70' : 'text-gray-300'}`}>
-                      {m.title}
-                    </span>
-                    <span className="text-[10px] text-gold-400/80 font-semibold shrink-0">+{missionXPReward(m.difficulty)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )
-        }
-      </Card>
 
       {/* ── Summary cards ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -916,31 +926,25 @@ function AttributesCard({ attributes, attributeXP }: { attributes: PlayerAttribu
         </div>
         <span className="text-xs text-gray-600">{totalAttributePoints(attributes)} pts totales</span>
       </div>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {ATTRIBUTES.map(attr => {
           const value = attributes[attr] ?? 0;
           const { tier, next, pct } = getAttributeTier(value, attributeXP[attr] ?? 0);
           const color = ATTRIBUTE_COLORS[attr];
           const Icon = ATTRIBUTE_ICONS[attr];
+          const tierTitle = next ? `${tier.name} → ${next.name} (${next.min})` : `${tier.name} · rango máximo`;
           return (
-            <div key={attr}>
-              <div className="flex items-center gap-2.5">
-                <Icon size={14} className="shrink-0" style={{ color }} />
-                <span className="text-xs font-bold w-8 shrink-0" style={{ color }}>{attr}</span>
-                <div className="flex-1 h-2 bg-black/40 border border-white/5 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${pct}%`, background: color }}
-                  />
-                </div>
-                <span className="text-xs text-gray-400 w-6 text-right shrink-0 tabular-nums">{value}</span>
+            <div key={attr} className="flex items-center gap-2.5" title={tierTitle}>
+              <Icon size={14} className="shrink-0" style={{ color }} />
+              <span className="text-xs font-bold w-8 shrink-0" style={{ color }}>{attr}</span>
+              <div className="flex-1 h-2.5 bg-black/40 border border-white/5 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}99, ${color})`, boxShadow: `0 0 6px ${color}80` }}
+                />
               </div>
-              <p className="text-[10px] text-gray-600 mt-0.5 ml-[26px]">
-                <span style={{ color }}>{tier.name}</span>
-                {next
-                  ? <span className="text-gray-700"> → {next.name} ({next.min})</span>
-                  : <span className="text-gray-700"> · rango máximo</span>}
-              </p>
+              <span className="text-[10px] w-[74px] shrink-0 truncate hidden sm:inline" style={{ color }}>{tier.name}</span>
+              <span className="text-xs text-gray-400 w-6 text-right shrink-0 tabular-nums">{value}</span>
             </div>
           );
         })}
@@ -1000,15 +1004,21 @@ function DayRing({ pct }: { pct: number }) {
   const r = 28;
   const circum = 2 * Math.PI * r;
   const offset = circum * (1 - pct / 100);
-  const color = pct === 100 ? '#34C08B' : pct >= 60 ? '#4DA6FF' : pct >= 30 ? '#8B5CF6' : '#2B4066';
+  const [from, to] = pct === 100 ? ['#34C08B', '#6EE0B4'] : pct >= 60 ? ['#1F66B8', '#7CBEFF'] : pct >= 30 ? ['#7C3AED', '#A78BFA'] : ['#2B4066', '#4A5872'];
 
   return (
-    <div className="relative w-20 h-20">
+    <div className="relative w-20 h-20" style={{ filter: pct > 0 ? `drop-shadow(0 0 6px ${from}55)` : undefined }}>
       <svg className="w-full h-full -rotate-90" viewBox="0 0 70 70">
-        <circle cx="35" cy="35" r={r} fill="none" stroke="#1B2A47" strokeWidth="6" />
+        <defs>
+          <linearGradient id="dayring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={from} />
+            <stop offset="100%" stopColor={to} />
+          </linearGradient>
+        </defs>
+        <circle cx="35" cy="35" r={r} fill="none" stroke="#131C2E" strokeWidth="6" />
         <circle
           cx="35" cy="35" r={r} fill="none"
-          stroke={color}
+          stroke="url(#dayring-grad)"
           strokeWidth="6"
           strokeLinecap="round"
           strokeDasharray={circum}
@@ -1034,17 +1044,24 @@ function MiniStat({
   sub: string;
   color: 'orange' | 'blue' | 'gold' | 'purple';
 }) {
-  const bgMap = {
-    orange: 'bg-orange-900/15 border-orange-800/30',
-    blue: 'bg-blue-900/15 border-blue-800/30',
-    gold: 'bg-amber-900/15 border-amber-800/30',
-    purple: 'bg-purple-900/15 border-purple-800/30',
+  const styleMap = {
+    orange: { border: 'border-orange-800/30', accent: '#F59E0B', chip: 'bg-orange-900/30 border-orange-700/40' },
+    blue: { border: 'border-blue-800/30', accent: '#4DA6FF', chip: 'bg-blue-900/30 border-blue-700/40' },
+    gold: { border: 'border-amber-800/30', accent: '#E3BC4B', chip: 'bg-amber-900/30 border-amber-700/40' },
+    purple: { border: 'border-purple-800/30', accent: '#A78BFA', chip: 'bg-purple-900/30 border-purple-700/40' },
   };
+  const s = styleMap[color];
   return (
-    <div className={`${bgMap[color]} border rounded-xl p-2.5 flex flex-col gap-1`}>
-      <div className="flex items-center gap-1.5">{icon}<p className="text-xs text-gray-500 leading-none">{label}</p></div>
-      <p className="text-base font-bold text-white leading-none">{value}</p>
-      <p className="text-xs text-gray-600 leading-none truncate">{sub}</p>
+    <div
+      className={`${s.border} border rounded-xl p-2.5 flex flex-col gap-1.5 bg-gradient-to-b from-[#0C1424] to-[#080D19]`}
+      style={{ boxShadow: `inset 2px 0 0 ${s.accent}66` }}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${s.chip}`}>{icon}</span>
+        <p className="text-[11px] text-gray-500 leading-none">{label}</p>
+      </div>
+      <p className="font-display text-lg font-bold text-white leading-none">{value}</p>
+      <p className="text-[10px] text-gray-600 leading-none truncate">{sub}</p>
     </div>
   );
 }
@@ -1086,7 +1103,12 @@ function StreakMilestones({ streak }: { streak: number }) {
             key={m}
             className={`flex-1 flex flex-col items-center gap-1`}
           >
-            <div className={`w-full h-1.5 rounded-full ${streak >= m ? 'bg-orange-500' : 'bg-gray-800'}`} />
+            <div
+              className="w-full h-1.5 rounded-full"
+              style={streak >= m
+                ? { background: 'linear-gradient(90deg, #D97706, #F59E0B)', boxShadow: '0 0 6px rgba(245,158,11,0.45)' }
+                : { background: '#1B2A47' }}
+            />
             <span className={`text-xs ${streak >= m ? 'text-orange-400' : 'text-gray-700'}`}>
               {labels[m]}
             </span>
@@ -1101,17 +1123,14 @@ function StreakMilestones({ streak }: { streak: number }) {
         </div>
       )}
 
-      {streak >= 7 && (
-        <div className="mt-3 pt-3 border-t border-[#1B2A47]">
-          <div className="flex flex-wrap gap-2">
-            {[7, 14, 21, 30, 60].filter(m => streak >= m).map(m => (
-              <span key={m} className="text-xs px-2 py-0.5 rounded-md bg-orange-900/20 border border-orange-800/30 text-orange-400">
-                {labels[m] ?? `${m}d`} ✓
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="mt-3 pt-3 border-t border-[#1B2A47] flex items-center gap-2">
+        <ShieldCheck size={13} className={streak >= STREAK_GRACE_MIN ? 'text-emerald-400' : 'text-gray-700'} />
+        <p className="text-[11px] text-gray-600">
+          {streak >= STREAK_GRACE_MIN
+            ? <span className="text-emerald-400/80">Racha protegida: una falta de 1 día no la rompe</span>
+            : `Llega a ${STREAK_GRACE_MIN} días para proteger tu racha contra 1 día fallado`}
+        </p>
+      </div>
     </Card>
   );
 }
