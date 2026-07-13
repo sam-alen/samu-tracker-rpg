@@ -1,0 +1,311 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── "The System" palette (Solo Leveling) ─────────────────
+     Near-black blue surfaces, electric-blue glow as the primary
+     accent, shadow violet as the secondary. NOTE: the ramp keeps
+     its legacy `gold-*` name from the previous theme so every
+     component keeps working — its values are now system blue. */
+  --color-bg-primary: #05070D;
+  --color-bg-deep: #04060B;
+  --color-bg-card: #0B1120;
+  --color-bg-card-hover: #101B31;
+  --color-border: #1B2A47;
+  --color-border-light: #2B4066;
+
+  --color-text-primary: #E8F1FF;
+  --color-text-secondary: #93A5C4;
+
+  /* Electric system blue (legacy name: gold) */
+  --color-gold-100: #D6ECFF;
+  --color-gold-200: #A8D4FF;
+  --color-gold-300: #7CBEFF;
+  --color-gold-400: #4DA6FF;
+  --color-gold-500: #2E86E0;
+  --color-gold-600: #1F66B8;
+  --color-gold-700: #174D8C;
+  --color-gold-800: #0F3560;
+  --color-gold-900: #0A2340;
+
+  /* Shadow violet — the secondary accent */
+  --color-arcane-200: #D8CCFA;
+  --color-arcane-300: #C4B0F5;
+  --color-arcane-400: #A78BFA;
+  --color-arcane-500: #8B5CF6;
+  --color-arcane-600: #7C3AED;
+  --color-arcane-700: #5B21B6;
+  --color-arcane-800: #3B1A72;
+  --color-arcane-900: #241046;
+
+  /* Blue-tinted neutral ramp so every gray utility fits the theme */
+  --color-gray-50: #F2F6FC;
+  --color-gray-100: #E2EAF6;
+  --color-gray-200: #C6D4E8;
+  --color-gray-300: #9FB3D1;
+  --color-gray-400: #7E92B4;
+  --color-gray-500: #61718F;
+  --color-gray-600: #4A5872;
+  --color-gray-700: #364259;
+  --color-gray-800: #232E43;
+  --color-gray-900: #16202F;
+  --color-gray-950: #0C121D;
+
+  --color-accent-blue: #4DA6FF;
+  --color-accent-purple: #8B5CF6;
+  --color-accent-gold: #4DA6FF;
+  --color-success: #34C08B;
+  --color-warning: #E3BC4B;
+  --color-danger: #E5484D;
+
+  --font-display: 'Rajdhani', 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #05070D;
+  color: #E8F1FF;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Layered ambience: cold blue glow top, shadow-violet ember bottom, vignette */
+.app-bg {
+  background-color: #05070D;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(46, 134, 224, 0.12), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 95% 110%, rgba(124, 58, 237, 0.10), transparent 55%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.45) 100%);
+  background-attachment: fixed;
+}
+
+/* Fine grain + faint scanlines: the "system window" texture */
+.app-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(77, 166, 255, 0.016) 0 1px, transparent 1px 3px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.03 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  z-index: 0;
+}
+
+/* ── Typography helpers ─────────────────────────────────── */
+
+.font-display {
+  font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+  letter-spacing: 0.08em;
+}
+
+.text-gradient-gold {
+  background: linear-gradient(160deg, #D6ECFF 10%, #4DA6FF 50%, #1F66B8 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── System window frame (formerly the ornate card) ─────── */
+
+.card-ornate {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(77, 166, 255, 0.05), transparent 40%),
+    linear-gradient(180deg, #0D1526, #080D19);
+  border: 1px solid #1E3560;
+  box-shadow:
+    inset 0 1px 0 rgba(168, 212, 255, 0.06),
+    0 0 18px rgba(46, 134, 224, 0.10),
+    0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.card-ornate::before,
+.card-ornate::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  border-color: rgba(77, 166, 255, 0.75);
+  border-style: solid;
+}
+
+.card-ornate::before {
+  top: -1px;
+  left: -1px;
+  border-width: 1.5px 0 0 1.5px;
+  border-top-left-radius: 6px;
+}
+
+.card-ornate::after {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 1.5px 1.5px 0;
+  border-bottom-right-radius: 6px;
+}
+
+/* System divider: ── ◆ ── in electric blue */
+.divider-ornate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(77, 166, 255, 0.6);
+}
+
+.divider-ornate::before,
+.divider-ornate::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(77, 166, 255, 0.4));
+}
+
+.divider-ornate::after {
+  background: linear-gradient(90deg, rgba(77, 166, 255, 0.4), transparent);
+}
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #05070D;
+}
+::-webkit-scrollbar-thumb {
+  background: #2B4066;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4A5872;
+}
+
+/* ── Animations ─────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Electric XP bar with a travelling sheen */
+.xp-bar {
+  background: linear-gradient(90deg, #1F66B8, #4DA6FF 40%, #D6ECFF 50%, #4DA6FF 60%, #1F66B8);
+  background-size: 200% 100%;
+  animation: shimmer 3.5s linear infinite;
+  box-shadow: 0 0 12px rgba(77, 166, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(77, 166, 255, 0); }
+  50% { box-shadow: 0 0 12px 2px rgba(77, 166, 255, 0.4); }
+}
+
+.glow-blue {
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.rise-in {
+  animation: rise-in 0.35s ease-out both;
+}
+
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sheet-up {
+  animation: sheet-up 0.25s ease-out both;
+}
+
+/* ── Reward FX (FxLayer) ────────────────────────────────── */
+
+/* "+XP / +oro" chip floating up from the click point */
+@keyframes fx-float {
+  0% { opacity: 0; transform: translate(-50%, 4px) scale(0.7); }
+  12% { opacity: 1; transform: translate(-50%, -12px) scale(1.08); }
+  25% { transform: translate(-50%, -18px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -64px) scale(0.96); }
+}
+.fx-float {
+  position: absolute;
+  transform: translate(-50%, 0);
+  animation: fx-float 1.15s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* radial sparks bursting from the click point */
+@keyframes fx-spark {
+  0% { opacity: 1; transform: translate(0, 0) rotate(45deg) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(45deg) scale(0.15); }
+}
+.fx-spark {
+  position: absolute;
+  border-radius: 1px;
+  animation: fx-spark 0.75s cubic-bezier(0.15, 0.85, 0.4, 1) both;
+}
+
+/* top-center system banner: slide in, hold, fade out */
+@keyframes fx-banner {
+  0% { opacity: 0; transform: translate(-50%, -18px); }
+  8%, 82% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -12px); }
+}
+.fx-banner {
+  transform: translate(-50%, 0);
+  animation: fx-banner 2.8s ease-out both;
+  box-shadow: 0 0 30px rgba(46, 134, 224, 0.25), 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* level-up overlay */
+@keyframes fx-overlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fx-overlay { animation: fx-overlay 0.25s ease-out both; }
+
+@keyframes fx-card-in {
+  0% { opacity: 0; transform: scale(0.7); filter: blur(6px); }
+  55% { opacity: 1; transform: scale(1.04); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.fx-card-in { animation: fx-card-in 0.5s cubic-bezier(0.2, 1.2, 0.4, 1) both; }
+
+@keyframes fx-ring {
+  0% { opacity: 0.9; transform: scale(0.55); }
+  100% { opacity: 0; transform: scale(1.7); }
+}
+.fx-ring {
+  pointer-events: none;
+  animation: fx-ring 1.1s ease-out both;
+}
+
+@keyframes fx-glow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(77, 166, 255, 0.5)); }
+  50% { filter: drop-shadow(0 0 18px rgba(77, 166, 255, 0.9)); }
+}
+.fx-glow { animation: fx-glow 1.6s ease-in-out infinite; }
+
+/* Respect users who prefer reduced motion: collapse FX to near-instant so
+   the cleanup timers still remove the elements */
+@media (prefers-reduced-motion: reduce) {
+  .fx-float, .fx-spark, .fx-banner, .fx-overlay, .fx-card-in, .fx-ring, .fx-glow,
+  .rise-in, .xp-bar, .glow-blue {
+    animation-duration: 0.01s !important;
+    animation-iteration-count: 1 !important;
+  }
+}
