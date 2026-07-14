@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -24,7 +25,16 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
 
   if (!open) return null;
 
-  return (
+  // Portal straight to <body>: several section wrappers up the tree use the
+  // `rise-in` entrance animation, which — even once finished, thanks to
+  // `animation-fill-mode: both` — leaves a non-"none" computed `transform`
+  // on that ancestor. Per the CSS spec, ANY ancestor with a transform
+  // becomes the containing block for `position: fixed` descendants, so
+  // without a portal this modal was positioning itself relative to that
+  // (possibly scrolled, non-full-height) wrapper instead of the real
+  // viewport — the exact reason it rendered stuck near the top instead of
+  // centered. A portal escapes that ancestor chain entirely.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose} />
       <div className={`relative w-full ${sizeMap[size]} card-ornate rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto rise-in`}>
@@ -36,6 +46,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
         </div>
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
