@@ -17,11 +17,12 @@ import { todayISO, dateToLocalISO } from '../../lib/xp';
 import { XP_REWARDS } from '../../lib/xp';
 import { fx } from '../../lib/fx';
 import { checkAchievements } from '../../lib/achievements';
+import { checkObjectiveMissions } from '../../lib/objectiveMissions';
 import { normalizeUrl } from '../../lib/url';
 import { DAY_LABELS, DAY_LABELS_FULL, ALL_DAYS, WEEKDAYS, isHabitScheduledOnDate } from '../../lib/habits';
 import { resolveAttributes } from '../../lib/attributes';
 import { initialHabits } from '../../data/initial';
-import type { Habit, RPGAttribute } from '../../types';
+import type { Habit, Mission, RPGAttribute } from '../../types';
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
@@ -97,6 +98,7 @@ function DayScheduleBadge({ days }: { days: number[] }) {
 
 export function Habits() {
   const [habits, setHabits] = useLocalStorage<Habit[]>(storage.keys.habits, initialHabits);
+  const [missions, setMissions] = useLocalStorage<Mission[]>(storage.keys.missions, []);
   const { gainXP, loseXP } = useXP();
   const { gainAttributes, loseAttributes } = useAttributes();
   const today = todayISO();
@@ -165,6 +167,7 @@ export function Habits() {
       gainAttributes(resolveAttributes(habit, 'INT'), XP_REWARDS.habit);
       fx.rewardAt(e ?? null, XP_REWARDS.habit);
       checkAchievements();
+      checkObjectiveMissions(missions, setMissions, gainXP, gainAttributes);
     } else {
       loseXP(XP_REWARDS.habit);
       loseAttributes(resolveAttributes(habit, 'INT'), XP_REWARDS.habit);

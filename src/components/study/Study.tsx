@@ -12,7 +12,8 @@ import { storage } from '../../lib/storage';
 import { XP_REWARDS, todayISO, dateToLocalISO } from '../../lib/xp';
 import { fx } from '../../lib/fx';
 import { checkAchievements } from '../../lib/achievements';
-import type { StudySession, StudyArea, FocusLevel } from '../../types';
+import { checkObjectiveMissions } from '../../lib/objectiveMissions';
+import type { StudySession, StudyArea, FocusLevel, Mission } from '../../types';
 
 const AREAS: StudyArea[] = [
   'Salesforce Admin', 'Salesforce Developer', 'Apex', 'LWC',
@@ -35,8 +36,9 @@ function emptyForm(): Omit<StudySession, 'id' | 'xpAwarded'> {
 
 export function Study() {
   const [sessions, setSessions] = useLocalStorage<StudySession[]>(storage.keys.studySessions, []);
+  const [missions, setMissions] = useLocalStorage<Mission[]>(storage.keys.missions, []);
   const { gainXP, loseXP } = useXP();
-  const { gainAttribute, loseAttribute } = useAttributes();
+  const { gainAttribute, loseAttribute, gainAttributes } = useAttributes();
   const today = todayISO();
 
   const [showModal, setShowModal] = useState(false);
@@ -74,6 +76,7 @@ export function Study() {
       gainAttribute('INT', XP_REWARDS.study);
       fx.rewardAt(null, XP_REWARDS.study);
       checkAchievements();
+      checkObjectiveMissions(missions, setMissions, gainXP, gainAttributes);
     }
     setShowModal(false);
   }

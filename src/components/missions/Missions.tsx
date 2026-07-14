@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Check, Zap, Repeat, ToggleLeft, ToggleRight, Clock, CalendarClock } from 'lucide-react';
+import { Plus, Edit2, Trash2, Check, Zap, Repeat, ToggleLeft, ToggleRight, Clock, CalendarClock, Crosshair } from 'lucide-react';
 import { Card, SectionHeader } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
-import { Input } from '../ui/Input';
+import { Input, Select } from '../ui/Input';
 import { Badge } from '../ui/Badge';
 import { ProgressBar } from '../ui/ProgressBar';
 import { AttributeBadgeList, AttributePicker } from '../ui/AttributeBadge';
@@ -20,9 +20,18 @@ import {
   MISSION_DIFFICULTIES, ESTIMATED_DAYS_PRESETS, getMissionDifficulty, missionXPReward,
   isBossTier, formatEstimatedDays,
 } from '../../lib/missionDifficulty';
+import { computeObjectiveProgress, objectiveLabel } from '../../lib/objectiveMissions';
 import { initialMissions } from '../../data/initial';
 import { resolveAttributes } from '../../lib/attributes';
-import type { Mission, MissionTemplate, MissionDifficulty, RPGAttribute } from '../../types';
+import type {
+  Mission, MissionTemplate, MissionDifficulty, RPGAttribute, Habit, StudySession, PomodoroState, ObjectiveMetric,
+} from '../../types';
+
+const OBJECTIVE_METRICS: { id: ObjectiveMetric; label: string }[] = [
+  { id: 'habit-completions', label: 'Hábito' },
+  { id: 'study-sessions', label: 'Sesiones de estudio' },
+  { id: 'pomodoro-sessions', label: 'Pomodoros' },
+];
 
 function generateId() { return Math.random().toString(36).slice(2, 10); }
 
@@ -34,10 +43,37 @@ interface FormState {
   repeatDaily: boolean;
   special: boolean;
   deadline: string;
+  objective: boolean;
+  objectiveMetric: ObjectiveMetric;
+  objectiveHabitId: string;
+  objectiveTarget: number;
 }
 
 function emptyForm(): FormState {
-  return { title: '', attributes: ['DEX'], difficulty: 'normal', estimatedDays: undefined, repeatDaily: false, special: false, deadline: '' };
+  return {
+    title: '', attributes: ['DEX'], difficulty: 'normal', estimatedDays: undefined, repeatDaily: false, special: false, deadline: '',
+    objective: false, objectiveMetric: 'habit-completions', objectiveHabitId: '', objectiveTarget: 10,
+  };
+}
+
+function MetricPicker({ value, onChange }: { value: ObjectiveMetric; onChange: (m: ObjectiveMetric) => void }) {
+  return (
+    <div className="flex gap-1.5 flex-wrap">
+      {OBJECTIVE_METRICS.map(m => {
+        const active = value === m.id;
+        return (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => onChange(m.id)}
+            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${active ? 'border-gold-400 bg-gold-900/20 text-gold-200' : 'border-[#2B4066] text-gray-500'}`}
+          >
+            {m.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function DifficultyPicker({ value, onChange }: { value: MissionDifficulty; onChange: (d: MissionDifficulty) => void }) {
@@ -93,6 +129,12 @@ function DaysPicker({ value, onChange }: { value?: number; onChange: (d: number 
 export function Missions() {
   const [missions, setMissions] = useLocalStorage<Mission[]>(storage.keys.missions, initialMissions);
   const [templates, setTemplates] = useLocalStorage<MissionTemplate[]>(storage.keys.missionTemplates, []);
+  // Read-only here — only needed to power the objective-mission habit
+  // picker and to compute live progress on already-created objective
+  // missions. Actually mutating them happens exclusively in Habits/Study/Pomodoro.
+  const [habits] = useLocalStorage<Habit[]>(storage.keys.habits, []);
+  const [studySessions] = useLocalStorage<StudySession[]>(storage.keys.studySessions, []);
+  const [pomodoro] = useLocalStorage<PomodoroState>(storage.keys.pomodoro, { completedToday: 0, lastDate: '' });
   const { gainXP, loseXP } = useXP();
   const { gainAttributes, loseAttributes } = useAttributes();
   const today = todayISO();
@@ -122,16 +164,32 @@ export function Missions() {
       repeatDaily: false,
       special: !!m.special,
       deadline: m.deadline ?? '',
+      objective: !!m.objective,
+      objectiveMetric: m.objective?.metric ?? 'habit-completions',
+      objectiveHabitId: m.objective?.habitId ?? '',
+      objectiveTarget: m.objective?.target ?? 10,
     });
     setShowModal(true);
   }
 
   function save() {
     if (!form.title.trim()) return;
-    const { title, attributes, difficulty, estimatedDays, special, deadline } = form;
+    if (form.objective && form.objectiveMetric === 'habit-completions' && !form.objectiveHabitId) return; // must pick a habit
+    const { title, attributes, difficulty, estimatedDays, deadline } = form;
+    const special = form.objective ? true : form.special;
+    const objective: Mission['objective'] = form.objective
+      ? {
+          metric: form.objectiveMetric,
+          habitId: form.objectiveMetric === 'habit-completions' ? form.objectiveHabitId : undefined,
+          target: Math.max(1, form.objectiveTarget),
+          windowStart: editing?.objective?.windowStart ?? today,
+          completedOnceAt: editing?.objective?.completedOnceAt,
+        }
+      : undefined;
+
     if (editing) {
       setMissions(prev => prev.map(m => m.id === editing.id
-        ? { ...m, title, attributes, attribute: undefined, difficulty, estimatedDays, special, deadline: special && deadline ? deadline : undefined }
+        ? { ...m, title, attributes, attribute: undefined, difficulty, estimatedDays, special, deadline: special && deadline ? deadline : undefined, objective }
         : m));
     } else if (form.repeatDaily) {
       const templateId = generateId();
@@ -142,7 +200,7 @@ export function Missions() {
     } else {
       setMissions(prev => [...prev, {
         id: generateId(), title, attributes, difficulty, estimatedDays, date: today, status: 'pending', createdAt: today,
-        special, deadline: special && deadline ? deadline : undefined,
+        special, deadline: special && deadline ? deadline : undefined, objective,
       }]);
     }
     setShowModal(false);
@@ -322,6 +380,9 @@ export function Missions() {
               const boss = isBossTier(m.difficulty);
               const timeLabel = formatEstimatedDays(m.estimatedDays);
               const dueDays = m.deadline ? daysUntil(m.deadline, today) : null;
+              const objectiveProgress = m.objective
+                ? computeObjectiveProgress(m.objective, m.deadline, habits, studySessions, pomodoro)
+                : null;
               return (
                 <div
                   key={m.id}
@@ -352,6 +413,9 @@ export function Missions() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2.5 mt-0.5 text-[10px] text-gray-600">
+                      {m.objective && (
+                        <span className="flex items-center gap-0.5"><Crosshair size={9} />{objectiveLabel(m.objective, habits)}</span>
+                      )}
                       {timeLabel && <span className="flex items-center gap-0.5"><Clock size={9} />{timeLabel}</span>}
                       {dueDays !== null && m.status !== 'done' && (
                         <span className={`flex items-center gap-0.5 ${dueDays < 0 ? 'text-red-400' : dueDays <= 2 ? 'text-amber-400' : ''}`}>
@@ -360,6 +424,17 @@ export function Missions() {
                         </span>
                       )}
                     </div>
+                    {m.objective && objectiveProgress !== null && (
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <div className="flex-1 h-1 bg-black/30 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-arcane-500 to-gold-400"
+                            style={{ width: `${Math.min(100, Math.round((objectiveProgress / m.objective.target) * 100))}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-gray-500 shrink-0">{objectiveProgress}/{m.objective.target}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded-md bg-gold-900/40 border border-gold-700/40">
@@ -432,7 +507,7 @@ export function Missions() {
             <DaysPicker value={form.estimatedDays} onChange={m => setForm(p => ({ ...p, estimatedDays: m }))} />
           </div>
 
-          {!editing && (
+          {!editing && !form.objective && (
             <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -446,6 +521,55 @@ export function Missions() {
           )}
 
           {!form.repeatDaily && (
+            <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.objective}
+                onChange={e => setForm(p => ({ ...p, objective: e.target.checked, repeatDaily: false }))}
+                className="accent-[#4DA6FF]"
+              />
+              <Crosshair size={12} className="text-arcane-300" />
+              Misión objetivo (se completa sola al alcanzar una meta)
+            </label>
+          )}
+
+          {form.objective && (
+            <div className="space-y-3 pl-1 border-l-2 border-arcane-800/50 ml-1">
+              <div className="pl-3">
+                <p className="block text-xs font-medium text-gray-400 mb-1.5 tracking-wide">Qué contar</p>
+                <MetricPicker value={form.objectiveMetric} onChange={m => setForm(p => ({ ...p, objectiveMetric: m }))} />
+              </div>
+              {form.objectiveMetric === 'habit-completions' && (
+                <div className="pl-3">
+                  <Select
+                    label="Hábito"
+                    value={form.objectiveHabitId}
+                    onChange={e => setForm(p => ({ ...p, objectiveHabitId: e.target.value }))}
+                    options={[{ value: '', label: 'Elige un hábito...' }, ...habits.map(h => ({ value: h.id, label: h.name }))]}
+                  />
+                </div>
+              )}
+              <div className="pl-3">
+                <Input
+                  label="Meta (cuántas veces)"
+                  type="number"
+                  min={1}
+                  value={form.objectiveTarget}
+                  onChange={e => setForm(p => ({ ...p, objectiveTarget: Math.max(1, Number(e.target.value)) }))}
+                />
+              </div>
+              <div className="pl-3">
+                <Input
+                  label="Fecha límite de la meta (opcional)"
+                  type="date"
+                  value={form.deadline}
+                  onChange={e => setForm(p => ({ ...p, deadline: e.target.value }))}
+                />
+              </div>
+            </div>
+          )}
+
+          {!form.repeatDaily && !form.objective && (
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
                 <input

@@ -108,6 +108,31 @@ export interface Mission {
    *  stored amount (not a recompute from the mission's *current* difficulty),
    *  so editing difficulty after completion can never desync gain/undo. */
   xpAwarded?: number;
+  /** Present = this mission auto-completes when its counter reaches a
+   *  target, instead of (or in addition to) a manual click. See
+   *  lib/objectiveMissions.ts. */
+  objective?: MissionObjective;
+}
+
+/** What a mission's auto-completion counts, and how far it's gotten. */
+export type ObjectiveMetric = 'habit-completions' | 'study-sessions' | 'pomodoro-sessions';
+
+export interface MissionObjective {
+  metric: ObjectiveMetric;
+  /** Only present when metric === 'habit-completions' */
+  habitId?: string;
+  /** How many completions/sessions needed */
+  target: number;
+  /** ISO date (mission creation date) — progress never counts events before
+   *  this, so creating the mission can't be instantly satisfied by past
+   *  history. The window's end is the mission's own `deadline`, if set. */
+  windowStart: string;
+  /** Set the first time this auto-completes. Once present, the auto-check
+   *  permanently skips it — mirrors the achievement ratchet (permanent,
+   *  never re-triggers). Manually un-marking it afterward does NOT make it
+   *  re-auto-complete; re-completing it by hand is a plain mission
+   *  completion from then on, same as any other mission. */
+  completedOnceAt?: string;
 }
 
 /** A recurring mission definition. Each active day, a Mission instance is
@@ -171,6 +196,11 @@ export interface PomodoroState {
    *  exists in the UI for a finished pomodoro — always append-only). May be
    *  missing in old saves — treat as 0. */
   totalCompleted?: number;
+  /** ISO date per completed WORK session (not breaks) — one entry per
+   *  session, so the same date can repeat if more than one is completed the
+   *  same day. Powers pomodoro-count objective missions the same way
+   *  Habit.completedDates powers habit ones. Missing in old saves → []. */
+  completedDates?: string[];
 }
 
 /** Alert preferences, separate from PomodoroState (a settings object, not

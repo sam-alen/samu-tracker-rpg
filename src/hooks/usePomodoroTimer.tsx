@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 import { useXP } from './useXP';
+import { useAttributes } from './useAttributes';
 import { storage } from '../lib/storage';
 import { todayISO } from '../lib/xp';
 import { fx } from '../lib/fx';
 import { checkAchievements } from '../lib/achievements';
+import { checkObjectiveMissions } from '../lib/objectiveMissions';
 import { getMode } from '../lib/pomodoroModes';
 import {
   playCompletionSound, showCompletionNotification, notificationsSupported,
   notificationPermission as getNotifPermission, requestNotificationPermission,
 } from '../lib/pomodoroAlert';
 import { PomodoroTimerContext, type PomodoroTimerValue } from './pomodoroTimerContext';
-import type { PomodoroModeId, PomodoroPrefs, PomodoroSession, PomodoroState } from '../types';
+import type { Mission, PomodoroModeId, PomodoroPrefs, PomodoroSession, PomodoroState } from '../types';
 
 function computeSecondsLeft(session: PomodoroSession): number {
   if (!session.running || session.endsAt == null) return session.remainingSeconds;
@@ -26,8 +28,10 @@ function computeSecondsLeft(session: PomodoroSession): number {
  *  even if the tab is backgrounded and the browser throttles its timers. */
 export function PomodoroTimerProvider({ children }: { children: ReactNode }) {
   const { gainXP } = useXP();
+  const { gainAttributes } = useAttributes();
   const [pomState, setPomState] = useLocalStorage<PomodoroState>(storage.keys.pomodoro, { completedToday: 0, lastDate: '' });
   const [prefs, setPrefs] = useLocalStorage<PomodoroPrefs>(storage.keys.pomodoroPrefs, { sound: true, notifications: false });
+  const [missions, setMissions] = useLocalStorage<Mission[]>(storage.keys.missions, []);
   const [notifPermission, setNotifPermission] = useState(getNotifPermission());
 
   const [session, setSessionState] = useState<PomodoroSession>(() => storage.getPomodoroSession());
@@ -60,6 +64,7 @@ export function PomodoroTimerProvider({ children }: { children: ReactNode }) {
         completedToday: (prev.lastDate === today ? prev.completedToday : 0) + 1,
         lastDate: today,
         totalCompleted: (prev.totalCompleted ?? 0) + 1,
+        completedDates: [...(prev.completedDates ?? []), today],
       }));
       setSession(prev => ({ ...prev, isBreak: true, running: false, endsAt: null, remainingSeconds: mode.breakSeconds }));
       fx.rewardAt(null, mode.xp);
@@ -72,13 +77,14 @@ export function PomodoroTimerProvider({ children }: { children: ReactNode }) {
         showCompletionNotification('Sesión de enfoque completada', `${mode.label} de trabajo profundo · +${mode.xp} XP · ahora toca descansar`);
       }
       checkAchievements();
+      checkObjectiveMissions(missions, setMissions, gainXP, gainAttributes);
     } else {
       setSession(prev => ({ ...prev, isBreak: false, running: false, endsAt: null, remainingSeconds: mode.workSeconds }));
       if (prefs.notifications) {
         showCompletionNotification('Descanso terminado', 'Hora de volver al enfoque');
       }
     }
-  }, [session.isBreak, mode, today, gainXP, setPomState, setSession, prefs.sound, prefs.notifications]);
+  }, [session.isBreak, mode, today, gainXP, gainAttributes, setPomState, setSession, prefs.sound, prefs.notifications, missions, setMissions]);
 
   // Interval is torn down and recreated whenever running/endsAt change
   // (start, pause, phase transition) — cheap since it ticks at most once a

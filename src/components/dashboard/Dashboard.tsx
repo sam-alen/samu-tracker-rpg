@@ -16,6 +16,7 @@ import { storage } from '../../lib/storage';
 import { todayISO, XP_REWARDS, dateToLocalISO } from '../../lib/xp';
 import { fx } from '../../lib/fx';
 import { checkAchievements, computeStats, getClosestAchievement } from '../../lib/achievements';
+import { checkObjectiveMissions } from '../../lib/objectiveMissions';
 import { pendingTemplatesForToday, instantiateTemplates, dailyMissionsFor } from '../../lib/missions';
 import { missionXPReward, getMissionDifficulty } from '../../lib/missionDifficulty';
 import { STREAK_GRACE_MIN } from '../../lib/xp';
@@ -244,6 +245,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
       gainAttributes(resolveAttributes(habit, 'INT'), XP_REWARDS.habit);
       fx.rewardAt(e ?? null, XP_REWARDS.habit);
       checkAchievements();
+      checkObjectiveMissions(missions, setMissions, gainXP, gainAttributes);
     } else {
       loseXP(XP_REWARDS.habit);
       gainAttributes(resolveAttributes(habit, 'INT'), -XP_REWARDS.habit);
