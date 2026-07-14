@@ -29,6 +29,7 @@ const KEYS = {
   recommendationInteractions: 'rpg_recommendation_interactions',
   recommendationAffinity: 'rpg_recommendation_affinity',
   recommendationWeeklyPlan: 'rpg_recommendation_weekly_plan',
+  recommendationCustomItems: 'rpg_recommendation_custom_items',
   backupReminder: 'rpg_backup_reminder',
 } as const;
 
@@ -147,6 +148,9 @@ export const storage = {
   getRecommendationWeeklyPlan: () => get<AppState['recommendationWeeklyPlan']>(KEYS.recommendationWeeklyPlan, null),
   setRecommendationWeeklyPlan: (v: AppState['recommendationWeeklyPlan']) => set(KEYS.recommendationWeeklyPlan, v),
 
+  getRecommendationCustomItems: () => get<AppState['recommendationCustomItems']>(KEYS.recommendationCustomItems, []),
+  setRecommendationCustomItems: (v: AppState['recommendationCustomItems']) => set(KEYS.recommendationCustomItems, v),
+
   getBackupReminder: () => get<AppState['backupReminder']>(KEYS.backupReminder, { lastExportAt: null, lastDismissedAt: null }),
   setBackupReminder: (v: AppState['backupReminder']) => set(KEYS.backupReminder, v),
 
@@ -177,6 +181,7 @@ export const storage = {
       recommendationInteractions: this.getRecommendationInteractions(),
       recommendationAffinity: this.getRecommendationAffinity(),
       recommendationWeeklyPlan: this.getRecommendationWeeklyPlan(),
+      recommendationCustomItems: this.getRecommendationCustomItems(),
       backupReminder: this.getBackupReminder(),
     };
     return JSON.stringify(data, null, 2);
@@ -209,6 +214,7 @@ export const storage = {
     if (data.recommendationInteractions) this.setRecommendationInteractions(data.recommendationInteractions);
     if (data.recommendationAffinity) this.setRecommendationAffinity(data.recommendationAffinity);
     if (data.recommendationWeeklyPlan) this.setRecommendationWeeklyPlan(data.recommendationWeeklyPlan);
+    if (data.recommendationCustomItems) this.setRecommendationCustomItems(data.recommendationCustomItems);
     if (data.backupReminder) this.setBackupReminder(data.backupReminder);
   },
 

@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { UserCog, Trophy, Bookmark, History, Link2, Compass } from 'lucide-react';
+import { UserCog, Trophy, Bookmark, History, Link2, Compass, FileJson } from 'lucide-react';
 import { SectionHeader, Card } from '../ui/Card';
 import { Tabs, type TabDef } from '../ui/Tabs';
 import { Badge } from '../ui/Badge';
 import { useRecommendationEngine } from '../../hooks/useRecommendationEngine';
-import { scoreItem } from '../../lib/recommendations';
-import { RECOMMENDATION_CATALOG } from '../../data/recommendations';
+import { scoreItem, composeReason } from '../../lib/recommendations';
+import type { RecommendationCategory } from '../../types';
 import { RecommendationCard } from './RecommendationCard';
 import { RecommendationCarousel } from './RecommendationCarousel';
 import { RecommendationDetailModal } from './RecommendationDetailModal';
@@ -14,15 +14,16 @@ import { defaultFilters, applyFilters, type RecommendationFilters } from '../../
 import { RecommendationProfileEditor } from './RecommendationProfileEditor';
 import { WeeklyPlanPanel } from './WeeklyPlanPanel';
 import { LegacyLinksTab } from './LegacyLinksTab';
-import { composeReason } from '../../lib/recommendations';
+import { RecommendationJsonImportTab } from './RecommendationJsonImportTab';
 
-type TabId = 'para-ti' | 'guardados' | 'historial' | 'mis-enlaces';
+type TabId = 'para-ti' | 'guardados' | 'historial' | 'mis-enlaces' | 'json';
 
 const TABS: TabDef<TabId>[] = [
   { id: 'para-ti', label: 'Para ti', icon: <Compass size={14} /> },
   { id: 'guardados', label: 'Guardados', icon: <Bookmark size={14} /> },
   { id: 'historial', label: 'Historial', icon: <History size={14} /> },
   { id: 'mis-enlaces', label: 'Mis enlaces', icon: <Link2 size={14} /> },
+  { id: 'json', label: 'Mi catálogo (JSON)', icon: <FileJson size={14} /> },
 ];
 
 function isDefaultFilters(f: RecommendationFilters): boolean {
@@ -41,7 +42,7 @@ export function Recommendations() {
   const primaryGoal = engine.profile.goals.find(g => g.id === engine.profile.primaryGoalId);
   const doneInPlan = engine.weeklyPlan.slots.filter(s => engine.interactions[s.itemId]?.status === 'completed').length;
 
-  const openItem = openItemId ? RECOMMENDATION_CATALOG.find(i => i.id === openItemId) ?? null : null;
+  const openItem = openItemId ? engine.catalog.find(i => i.id === openItemId) ?? null : null;
   const openScored = openItem ? scoreItem(openItem, engine.profile, engine.affinity, { now: new Date() }) : undefined;
 
   function openDetail(id: string) {
@@ -49,7 +50,7 @@ export function Recommendations() {
     setOpenItemId(id);
   }
 
-  function similarTo(category: typeof RECOMMENDATION_CATALOG[number]['category']) {
+  function similarTo(category: RecommendationCategory) {
     setFilters({ ...defaultFilters(), category });
     setOpenItemId(null);
   }
@@ -60,7 +61,7 @@ export function Recommendations() {
     return applyFilters(engine.scoredCatalog.map(s => s.item), filters);
   }, [filtersActive, filters, engine.scoredCatalog]);
 
-  function renderCard(item: (typeof RECOMMENDATION_CATALOG)[number], widthFull = false) {
+  function renderCard(item: (typeof engine.catalog)[number], widthFull = false) {
     const scored = scoreItem(item, engine.profile, engine.affinity, { now: new Date() });
     return (
       <RecommendationCard
@@ -110,6 +111,7 @@ export function Recommendations() {
         <div className="space-y-6">
           <WeeklyPlanPanel
             plan={engine.weeklyPlan}
+            catalog={engine.catalog}
             interactions={engine.interactions}
             regenCap={engine.regenCap}
             onOpenItem={openDetail}
@@ -175,6 +177,14 @@ export function Recommendations() {
       )}
 
       {tab === 'mis-enlaces' && <LegacyLinksTab />}
+
+      {tab === 'json' && (
+        <RecommendationJsonImportTab
+          customItems={engine.customItems}
+          onImport={engine.importCustomItemsFromJson}
+          onRemove={engine.removeCustomItem}
+        />
+      )}
 
       <RecommendationDetailModal
         item={openItem}

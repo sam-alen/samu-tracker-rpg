@@ -1,7 +1,6 @@
 import { RefreshCw } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { RECOMMENDATION_CATALOG } from '../../data/recommendations';
-import type { RecommendationInteraction, RecommendationWeeklyPlan, RecommendationWeeklyPlanSlot } from '../../types';
+import type { RecommendationInteraction, RecommendationItem, RecommendationWeeklyPlan, RecommendationWeeklyPlanSlot } from '../../types';
 
 const ROLE_LABELS: Record<RecommendationWeeklyPlanSlot['role'], string> = {
   principal: 'Contenido principal',
@@ -13,13 +12,14 @@ const ROLE_LABELS: Record<RecommendationWeeklyPlanSlot['role'], string> = {
 
 interface Props {
   plan: RecommendationWeeklyPlan;
+  catalog: RecommendationItem[];
   interactions: Record<string, RecommendationInteraction>;
   regenCap: number;
   onOpenItem: (id: string) => void;
   onRegenerate: () => void;
 }
 
-export function WeeklyPlanPanel({ plan, interactions, regenCap, onOpenItem, onRegenerate }: Props) {
+export function WeeklyPlanPanel({ plan, catalog, interactions, regenCap, onOpenItem, onRegenerate }: Props) {
   const doneCount = plan.slots.filter(s => interactions[s.itemId]?.status === 'completed').length;
   const canRegenerate = plan.regenCount < regenCap;
 
@@ -38,7 +38,7 @@ export function WeeklyPlanPanel({ plan, interactions, regenCap, onOpenItem, onRe
 
       <div className="space-y-1.5">
         {plan.slots.map(slot => {
-          const item = RECOMMENDATION_CATALOG.find(i => i.id === slot.itemId);
+          const item = catalog.find(i => i.id === slot.itemId);
           if (!item) return null;
           const done = interactions[slot.itemId]?.status === 'completed';
           return (

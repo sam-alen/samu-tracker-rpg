@@ -502,6 +502,10 @@ export interface AppState {
   recommendationInteractions: Record<string, RecommendationInteraction>;
   recommendationAffinity: CategoryAffinity;
   recommendationWeeklyPlan: RecommendationWeeklyPlan | null;
+  /** User-added catalog items (imported as JSON) — merged with the built-in
+   *  RECOMMENDATION_CATALOG so they get full scoring/weekly-plan/section
+   *  support, not a second-class separate list. */
+  recommendationCustomItems: RecommendationItem[];
   savedLinks: SavedLink[];
   quickLinks: QuickLink[];
   unlockedAchievements: string[];

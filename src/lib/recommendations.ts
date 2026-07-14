@@ -1,4 +1,4 @@
-import { RECOMMENDATION_CATALOG, BUCKET_OF } from '../data/recommendations';
+import { BUCKET_OF } from '../data/recommendations';
 import type {
   CategoryAffinity, RecommendationCategory, RecommendationDifficulty, RecommendationFeedbackFlag,
   RecommendationInteraction, RecommendationItem, RecommendationProfile, RecommendationWeeklyPlan,
@@ -153,8 +153,13 @@ export interface RankOptions {
 /** Scores + hard-excludes dismissed/completed/broken-link items (unless
  *  explicitly opted back in for history views), then applies a variety
  *  penalty (-5 per repeated category already seen in this ranked batch,
- *  capped at -15) via a single greedy pass over the score-sorted list. */
+ *  capped at -15) via a single greedy pass over the score-sorted list.
+ *  `catalog` is the merged built-in + user-imported item list — every
+ *  function below that needs the catalog takes it as its first parameter
+ *  instead of importing a fixed constant, so user-added items get full
+ *  scoring/weekly-plan/section support like the built-in ones. */
 export function rankItems(
+  catalog: RecommendationItem[],
   profile: RecommendationProfile,
   affinity: CategoryAffinity,
   interactions: Record<string, RecommendationInteraction>,
@@ -164,7 +169,7 @@ export function rankItems(
   const excluded = new Set(options.excludeIds ?? []);
   const weekSeed = getISOWeek(context.now);
 
-  const eligible = RECOMMENDATION_CATALOG.filter(item => {
+  const eligible = catalog.filter(item => {
     if (excluded.has(item.id)) return false;
     const interaction = interactionFor(item.id, interactions);
     if (!interaction) return true;
@@ -208,6 +213,7 @@ export function computeAffinityDelta(current: number, flag: RecommendationFeedba
 // ─── Exploratory pick (the 'exploratorio' bucket is a behavior, not a fixed category) ─
 
 export function pickExploratoryItem(
+  catalog: RecommendationItem[],
   profile: RecommendationProfile,
   affinity: CategoryAffinity,
   interactions: Record<string, RecommendationInteraction>,
@@ -215,13 +221,13 @@ export function pickExploratoryItem(
 ): RecommendationItem | null {
   const thirtyDaysAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000;
   const recentCategories = new Set<RecommendationCategory>();
-  for (const item of RECOMMENDATION_CATALOG) {
+  for (const item of catalog) {
     const interaction = interactionFor(item.id, interactions);
     if (interaction && new Date(interaction.updatedAt).getTime() > thirtyDaysAgo) {
       recentCategories.add(item.category);
     }
   }
-  const candidates = rankItems(profile, affinity, interactions, { now })
+  const candidates = rankItems(catalog, profile, affinity, interactions, { now })
     .filter(s => !recentCategories.has(s.item.category));
   if (candidates.length === 0) return null;
   const weighted = candidates.sort((a, b) => b.item.priority - a.item.priority);
@@ -240,90 +246,90 @@ function toItems(scored: ScoredItem[], limit: number): RecommendationItem[] {
   return scored.slice(0, limit).map(s => s.item);
 }
 
-export function getContinueLearning(interactions: Record<string, RecommendationInteraction>): RecommendationItem[] {
+export function getContinueLearning(catalog: RecommendationItem[], interactions: Record<string, RecommendationInteraction>): RecommendationItem[] {
   const viewed = Object.values(interactions)
     .filter(i => i.lastViewedAt && i.status !== 'completed' && i.status !== 'dismissed')
     .sort((a, b) => new Date(b.lastViewedAt!).getTime() - new Date(a.lastViewedAt!).getTime());
   const ids = viewed.map(i => i.itemId);
-  return RECOMMENDATION_CATALOG.filter(item => ids.includes(item.id)).slice(0, 6);
+  return catalog.filter(item => ids.includes(item.id)).slice(0, 6);
 }
 
-export function getForPrimaryGoal(profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
-  return toItems(rankItems(profile, affinity, interactions, { now }).filter(s => s.item.goalId === profile.primaryGoalId), 6);
+export function getForPrimaryGoal(catalog: RecommendationItem[], profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
+  return toItems(rankItems(catalog, profile, affinity, interactions, { now }).filter(s => s.item.goalId === profile.primaryGoalId), 6);
 }
 
-export function getBeforeWork(profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
+export function getBeforeWork(catalog: RecommendationItem[], profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
   const [h, m] = profile.schedule.workStart.split(':').map(Number);
   const workStartMinutes = h * 60 + m;
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   if (nowMinutes >= workStartMinutes) return [];
-  return toItems(rankItems(profile, affinity, interactions, { now, timeBlockMinutes: 15 }), 6);
+  return toItems(rankItems(catalog, profile, affinity, interactions, { now, timeBlockMinutes: 15 }), 6);
 }
 
-export function getAfterGym(profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
+export function getAfterGym(catalog: RecommendationItem[], profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
   const [h, m] = profile.schedule.gymEnd.split(':').map(Number);
   const gymEndMinutes = h * 60 + m;
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   if (nowMinutes < gymEndMinutes || nowMinutes > gymEndMinutes + 120) return [];
-  return toItems(rankItems(profile, affinity, interactions, { now }).filter(s =>
+  return toItems(rankItems(catalog, profile, affinity, interactions, { now }).filter(s =>
     s.item.category === 'nutricion' || s.item.category === 'gimnasio' || BUCKET_OF[s.item.category] === 'hobbies-entretenimiento',
   ), 6);
 }
 
-export function getWeekendPicks(profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
+export function getWeekendPicks(catalog: RecommendationItem[], profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
   const day = now.getDay();
   if (day !== 0 && day !== 6) return [];
-  return toItems(rankItems(profile, affinity, interactions, { now }).filter(s => s.item.timeMinutes >= 45), 6);
+  return toItems(rankItems(catalog, profile, affinity, interactions, { now }).filter(s => s.item.timeMinutes >= 45), 6);
 }
 
-export function getFreeResources(profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
-  return toItems(rankItems(profile, affinity, interactions, { now }).filter(s => s.item.cost === 'gratis'), 8);
+export function getFreeResources(catalog: RecommendationItem[], profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
+  return toItems(rankItems(catalog, profile, affinity, interactions, { now }).filter(s => s.item.cost === 'gratis'), 8);
 }
 
-export function getShortCourses(profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
-  return toItems(rankItems(profile, affinity, interactions, { now }).filter(s =>
+export function getShortCourses(catalog: RecommendationItem[], profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
+  return toItems(rankItems(catalog, profile, affinity, interactions, { now }).filter(s =>
     (s.item.type === 'course' || s.item.type === 'learning-path') && s.item.timeMinutes <= 30,
   ), 6);
 }
 
-export function getForCategory(category: RecommendationCategory, profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date, limit = 6): RecommendationItem[] {
-  return toItems(rankItems(profile, affinity, interactions, { now }).filter(s => s.item.category === category), limit);
+export function getForCategory(catalog: RecommendationItem[], category: RecommendationCategory, profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date, limit = 6): RecommendationItem[] {
+  return toItems(rankItems(catalog, profile, affinity, interactions, { now }).filter(s => s.item.category === category), limit);
 }
 
-export function getForTraining(profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
-  return toItems(rankItems(profile, affinity, interactions, { now }).filter(s => s.item.category === 'gimnasio' || s.item.category === 'nutricion'), 6);
+export function getForTraining(catalog: RecommendationItem[], profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
+  return toItems(rankItems(catalog, profile, affinity, interactions, { now }).filter(s => s.item.category === 'gimnasio' || s.item.category === 'nutricion'), 6);
 }
 
-export function getMatchingBooks(profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
-  return toItems(rankItems(profile, affinity, interactions, { now }).filter(s =>
+export function getMatchingBooks(catalog: RecommendationItem[], profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
+  return toItems(rankItems(catalog, profile, affinity, interactions, { now }).filter(s =>
     (s.item.type === 'book' || s.item.type === 'audiobook') &&
     s.item.tags.some(t => profile.favoriteGenres.some(g => g.toLowerCase().includes(t) || t.includes(g.toLowerCase()))),
   ), 6);
 }
 
-export function getBecauseYouCompleted(interactions: Record<string, RecommendationInteraction>): { basedOn: RecommendationItem; items: RecommendationItem[] } | null {
+export function getBecauseYouCompleted(catalog: RecommendationItem[], interactions: Record<string, RecommendationInteraction>): { basedOn: RecommendationItem; items: RecommendationItem[] } | null {
   const completed = Object.values(interactions)
     .filter(i => i.status === 'completed' && i.completedAt)
     .sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime());
   const last = completed[0];
   if (!last) return null;
-  const basedOn = RECOMMENDATION_CATALOG.find(i => i.id === last.itemId);
+  const basedOn = catalog.find(i => i.id === last.itemId);
   if (!basedOn?.relatedItemIds?.length) return null;
-  const items = RECOMMENDATION_CATALOG.filter(i => basedOn.relatedItemIds!.includes(i.id));
+  const items = catalog.filter(i => basedOn.relatedItemIds!.includes(i.id));
   return items.length > 0 ? { basedOn, items } : null;
 }
 
-export function getSimilarToInterests(profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
-  return toItems(rankItems(profile, affinity, interactions, { now }), 8);
+export function getSimilarToInterests(catalog: RecommendationItem[], profile: RecommendationProfile, affinity: CategoryAffinity, interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
+  return toItems(rankItems(catalog, profile, affinity, interactions, { now }), 8);
 }
 
-export function getForgottenSaved(interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
+export function getForgottenSaved(catalog: RecommendationItem[], interactions: Record<string, RecommendationInteraction>, now: Date): RecommendationItem[] {
   const twentyOneDaysAgo = now.getTime() - 21 * 24 * 60 * 60 * 1000;
   const forgotten = Object.values(interactions).filter(i =>
     i.status === 'saved' && i.savedAt && new Date(i.savedAt).getTime() < twentyOneDaysAgo,
   );
   const ids = forgotten.map(i => i.itemId);
-  return RECOMMENDATION_CATALOG.filter(item => ids.includes(item.id));
+  return catalog.filter(item => ids.includes(item.id));
 }
 
 // ─── Weekly plan ────────────────────────────────────────────────────────────
@@ -337,6 +343,7 @@ function pickAndRemove(pool: ScoredItem[], predicate: (s: ScoredItem) => boolean
 }
 
 export function generateWeeklyPlan(
+  catalog: RecommendationItem[],
   profile: RecommendationProfile,
   affinity: CategoryAffinity,
   interactions: Record<string, RecommendationInteraction>,
@@ -345,7 +352,7 @@ export function generateWeeklyPlan(
   excludedIds: string[],
 ): RecommendationWeeklyPlan {
   const week = getISOWeek(now);
-  const pool = rankItems(profile, affinity, interactions, { now }, { excludeIds: excludedIds });
+  const pool = rankItems(catalog, profile, affinity, interactions, { now }, { excludeIds: excludedIds });
   const usedCategories = new Set<RecommendationCategory>();
   const slots: RecommendationWeeklyPlanSlot[] = [];
 
@@ -369,7 +376,7 @@ export function generateWeeklyPlan(
   }
 
   const explanationParts = slots.map(slot => {
-    const item = RECOMMENDATION_CATALOG.find(i => i.id === slot.itemId);
+    const item = catalog.find(i => i.id === slot.itemId);
     if (!item) return '';
     const scored = scoreItem(item, profile, affinity, { now });
     return `"${item.title}" — ${composeReason(scored, profile)}`;
