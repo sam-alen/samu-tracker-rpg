@@ -9,6 +9,7 @@ import { Input } from '../ui/Input';
 import { Badge } from '../ui/Badge';
 import { ProgressBar } from '../ui/ProgressBar';
 import { AttributeBadgeList, AttributePicker } from '../ui/AttributeBadge';
+import { EmojiPicker } from '../ui/EmojiPicker';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useXP } from '../../hooks/useXP';
 import { useAttributes } from '../../hooks/useAttributes';
@@ -302,7 +303,11 @@ export function Habits() {
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title={editing ? 'Editar hábito' : 'Nuevo hábito'}>
         <div className="space-y-4">
-          <Input label="Emoji / Icono" value={form.icon} onChange={e => setForm(p => ({ ...p, icon: e.target.value }))} placeholder="✅" />
+          <div>
+            <Input label="Emoji / Icono" value={form.icon} onChange={e => setForm(p => ({ ...p, icon: e.target.value }))} placeholder="✅" />
+            <p className="text-xs text-gray-500 mt-2 mb-1.5">O elige uno rápido</p>
+            <EmojiPicker value={form.icon} onChange={icon => setForm(p => ({ ...p, icon }))} />
+          </div>
           <Input label="Nombre del hábito" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Ej: Leer 20 minutos" autoFocus />
           <div>
             <p className="block text-xs font-medium text-gray-400 mb-1.5 tracking-wide">Atributos que desarrolla</p>
