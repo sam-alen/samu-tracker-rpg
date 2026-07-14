@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { SessionMode } from '../lib/pomodoroModes';
-import type { PomodoroModeId, PomodoroPrefs } from '../types';
+import type { Habit, PomodoroModeId, PomodoroPrefs } from '../types';
 
 export interface PomodoroTimerValue {
   mode: SessionMode;
@@ -12,6 +12,11 @@ export interface PomodoroTimerValue {
   prefs: PomodoroPrefs;
   notifPermission: NotificationPermission | 'unsupported';
   notificationsAvailable: boolean;
+  /** For the "¿en qué hábito estás trabajando?" picker — purely a log of
+   *  time spent, never completes the habit itself. */
+  habits: Habit[];
+  linkedHabitId: string | null;
+  setLinkedHabit: (id: string | null) => void;
   start: () => void;
   pause: () => void;
   reset: () => void;

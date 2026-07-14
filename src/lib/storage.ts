@@ -5,7 +5,7 @@ import { defaultCategoryAffinity } from '../data/recommendations';
 import { MODES } from './pomodoroModes';
 
 function defaultPomodoroSession(): AppState['pomodoroSession'] {
-  return { modeId: '25', isBreak: false, running: false, endsAt: null, remainingSeconds: MODES[0].workSeconds };
+  return { modeId: '25', isBreak: false, running: false, endsAt: null, remainingSeconds: MODES[0].workSeconds, linkedHabitId: null };
 }
 
 const KEYS = {
@@ -19,6 +19,7 @@ const KEYS = {
   pomodoro: 'rpg_pomodoro',
   pomodoroPrefs: 'rpg_pomodoro_prefs',
   pomodoroSession: 'rpg_pomodoro_session',
+  habitTimeLogs: 'rpg_habit_time_logs',
   transactions: 'rpg_transactions',
   recurringExpenses: 'rpg_recurring_expenses',
   financeAccounts: 'rpg_finance_accounts',
@@ -110,6 +111,9 @@ export const storage = {
   getPomodoroSession: () => get<AppState['pomodoroSession']>(KEYS.pomodoroSession, defaultPomodoroSession()),
   setPomodoroSession: (v: AppState['pomodoroSession']) => set(KEYS.pomodoroSession, v),
 
+  getHabitTimeLogs: () => get<AppState['habitTimeLogs']>(KEYS.habitTimeLogs, []),
+  setHabitTimeLogs: (v: AppState['habitTimeLogs']) => set(KEYS.habitTimeLogs, v),
+
   getTransactions: () => get<AppState['transactions']>(KEYS.transactions, []),
   setTransactions: (v: AppState['transactions']) => set(KEYS.transactions, v),
 
@@ -179,6 +183,7 @@ export const storage = {
       pomodoro: this.getPomodoro(),
       pomodoroPrefs: this.getPomodoroPrefs(),
       pomodoroSession: this.getPomodoroSession(),
+      habitTimeLogs: this.getHabitTimeLogs(),
       transactions: this.getTransactions(),
       recurringExpenses: this.getRecurringExpenses(),
       financeAccounts: this.getFinanceAccounts(),
@@ -214,6 +219,7 @@ export const storage = {
     if (data.pomodoro) this.setPomodoro(data.pomodoro);
     if (data.pomodoroPrefs) this.setPomodoroPrefs(data.pomodoroPrefs);
     if (data.pomodoroSession) this.setPomodoroSession(data.pomodoroSession);
+    if (data.habitTimeLogs) this.setHabitTimeLogs(data.habitTimeLogs);
     if (data.transactions) this.setTransactions(data.transactions);
     if (data.recurringExpenses) this.setRecurringExpenses(data.recurringExpenses);
     if (data.financeAccounts) this.setFinanceAccounts(data.financeAccounts);

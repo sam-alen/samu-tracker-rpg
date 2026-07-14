@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Edit2, Trash2, Check, Flame, CheckSquare, ShieldOff, ExternalLink, Minus } from 'lucide-react';
+import { Plus, Edit2, Trash2, Check, Flame, CheckSquare, ShieldOff, ExternalLink, Minus, Timer } from 'lucide-react';
 import { Card, SectionHeader } from '../ui/Card';
 import { Tabs } from '../ui/Tabs';
 import { BadHabits } from '../bad-habits/BadHabits';
@@ -23,7 +23,7 @@ import { normalizeUrl } from '../../lib/url';
 import { DAY_LABELS, DAY_LABELS_FULL, ALL_DAYS, WEEKDAYS, isHabitScheduledOnDate } from '../../lib/habits';
 import { resolveAttributes } from '../../lib/attributes';
 import { initialHabits } from '../../data/initial';
-import type { Habit, Mission, RPGAttribute } from '../../types';
+import type { Habit, HabitTimeLog, Mission, RPGAttribute } from '../../types';
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
@@ -40,6 +40,13 @@ function getStreak(habit: Habit): number {
     } else break;
   }
   return streak;
+}
+
+function formatLoggedMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
 function toggleDay(days: number[], day: number): number[] {
@@ -100,6 +107,10 @@ function DayScheduleBadge({ days }: { days: number[] }) {
 export function Habits() {
   const [habits, setHabits] = useLocalStorage<Habit[]>(storage.keys.habits, initialHabits);
   const [missions, setMissions] = useLocalStorage<Mission[]>(storage.keys.missions, []);
+  // Logged from Pomodoro (usePomodoroTimer.tsx is the primary writer),
+  // purely informational time-per-habit, never affects completion. Habits.tsx
+  // only ever removes entries here (cleanup when a habit is deleted).
+  const [timeLogs, setTimeLogs] = useLocalStorage<HabitTimeLog[]>(storage.keys.habitTimeLogs, []);
   const { gainXP, loseXP } = useXP();
   const { gainAttributes, loseAttributes } = useAttributes();
   const today = todayISO();
@@ -147,6 +158,7 @@ export function Habits() {
 
   function remove(id: string) {
     setHabits(prev => prev.filter(h => h.id !== id));
+    setTimeLogs(prev => prev.filter(l => l.habitId !== id)); // orphaned logs otherwise linger forever
   }
 
   // gainXP/gainAttribute outside the updater: StrictMode re-runs updaters, doubling side effects.
@@ -232,6 +244,7 @@ export function Habits() {
           const done = h.completedDates.includes(today);
           const scheduled = isHabitScheduledOnDate(h, today);
           const streak = getStreak(h);
+          const loggedMinutes = timeLogs.filter(l => l.habitId === h.id).reduce((sum, l) => sum + l.minutes, 0);
           return (
             <div
               key={h.id}
@@ -266,6 +279,12 @@ export function Habits() {
                     <div className="flex items-center gap-1">
                       <Flame size={11} className="text-orange-400" />
                       <span className="text-xs text-orange-400">{streak}d racha</span>
+                    </div>
+                  )}
+                  {loggedMinutes > 0 && (
+                    <div className="flex items-center gap-1" title="Tiempo registrado desde Pomodoro">
+                      <Timer size={11} className="text-arcane-400" />
+                      <span className="text-xs text-arcane-400">{formatLoggedMinutes(loggedMinutes)}</span>
                     </div>
                   )}
                   {!scheduled && <span className="text-[10px] text-gray-600">No programado hoy</span>}

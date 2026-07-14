@@ -231,6 +231,23 @@ export interface PomodoroSession {
   /** Authoritative remaining seconds while paused/idle; ignored while running
    *  (derive from `endsAt` instead). */
   remainingSeconds: number;
+  /** Habit this session's time should be logged against, purely for
+   *  tracking — does NOT complete the habit (that still needs its own
+   *  manual click). Editable any time, including mid-run; credited to
+   *  whichever habit is selected at the moment a work session finishes. */
+  linkedHabitId: string | null;
+}
+
+/** One work session's worth of time logged against a habit via Pomodoro —
+ *  informational only, never affects the habit's own completedDates/streak.
+ *  Append-only, same as PomodoroState.completedDates (no undo path exists
+ *  for a finished pomodoro in the UI). */
+export interface HabitTimeLog {
+  id: string;
+  habitId: string;
+  minutes: number;
+  date: string; // ISO date the session was completed on
+  createdAt: string; // ISO datetime
 }
 
 // ─── Finances ────────────────────────────────────────────────────────────────
@@ -562,6 +579,7 @@ export interface AppState {
   pomodoro: PomodoroState;
   pomodoroPrefs: PomodoroPrefs;
   pomodoroSession: PomodoroSession;
+  habitTimeLogs: HabitTimeLog[];
   transactions: Transaction[];
   recurringExpenses: RecurringExpense[];
   financeAccounts: FinanceAccounts;

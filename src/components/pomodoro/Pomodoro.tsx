@@ -25,8 +25,10 @@ export function Pomodoro() {
   const [links, setLinks] = useLocalStorage<FocusLink[]>(storage.keys.focusLinks, initialFocusLinks);
   const {
     mode, modeId, isBreak, running, seconds, completedToday, prefs, notifPermission, notificationsAvailable,
+    habits, linkedHabitId, setLinkedHabit,
     start, pause, reset, selectMode, toggleSound, toggleNotifications,
   } = usePomodoroTimer();
+  const linkedHabit = habits.find(h => h.id === linkedHabitId);
 
   const total = isBreak ? mode.breakSeconds : mode.workSeconds;
   const pct = ((total - seconds) / total) * 100;
@@ -105,6 +107,25 @@ export function Pomodoro() {
         ))}
       </div>
 
+      {/* Linked habit — purely a time log, never completes the habit itself */}
+      <Card>
+        {habits.length > 0 ? (
+          <>
+            <Select
+              label="¿En qué hábito estás trabajando? (opcional)"
+              value={linkedHabitId ?? ''}
+              onChange={e => setLinkedHabit(e.target.value || null)}
+              options={[{ value: '', label: 'Sin vincular' }, ...habits.map(h => ({ value: h.id, label: `${h.icon} ${h.name}` }))]}
+            />
+            <p className="text-[10px] text-gray-600 mt-1.5">
+              Solo registra el tiempo de la sesión en ese hábito — no lo completa. Tienes que marcarlo tú.
+            </p>
+          </>
+        ) : (
+          <p className="text-xs text-gray-500">Crea hábitos en la sección Hábitos para poder vincular el tiempo de tus sesiones a uno.</p>
+        )}
+      </Card>
+
       {/* Timer */}
       <Card>
         <div className="flex flex-col items-center py-6 gap-6">
@@ -169,6 +190,13 @@ export function Pomodoro() {
               Ganando <span style={{ color: mode.ringColor }} className="font-semibold">+{mode.xp} XP</span> al completar
             </span>
           </div>
+
+          {linkedHabit && !isBreak && (
+            <p className="text-xs text-arcane-300 flex items-center gap-1.5">
+              <span>{linkedHabit.icon}</span>
+              Registrando tiempo en <span className="font-semibold">{linkedHabit.name}</span>
+            </p>
+          )}
         </div>
       </Card>
 

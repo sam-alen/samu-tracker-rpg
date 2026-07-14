@@ -13,12 +13,14 @@ import {
   notificationPermission as getNotifPermission, requestNotificationPermission,
 } from '../lib/pomodoroAlert';
 import { PomodoroTimerContext, type PomodoroTimerValue } from './pomodoroTimerContext';
-import type { Mission, PomodoroModeId, PomodoroPrefs, PomodoroSession, PomodoroState } from '../types';
+import type { HabitTimeLog, Mission, PomodoroModeId, PomodoroPrefs, PomodoroSession, PomodoroState } from '../types';
 
 function computeSecondsLeft(session: PomodoroSession): number {
   if (!session.running || session.endsAt == null) return session.remainingSeconds;
   return Math.max(0, Math.ceil((session.endsAt - Date.now()) / 1000));
 }
+
+function genId() { return Math.random().toString(36).slice(2, 10); }
 
 /** Owns the Pomodoro countdown as a single source of truth, mounted once at
  *  the app root (see App.tsx) instead of inside the Pomodoro screen — so
@@ -32,6 +34,15 @@ export function PomodoroTimerProvider({ children }: { children: ReactNode }) {
   const [pomState, setPomState] = useLocalStorage<PomodoroState>(storage.keys.pomodoro, { completedToday: 0, lastDate: '' });
   const [prefs, setPrefs] = useLocalStorage<PomodoroPrefs>(storage.keys.pomodoroPrefs, { sound: true, notifications: false });
   const [missions, setMissions] = useLocalStorage<Mission[]>(storage.keys.missions, []);
+  // Read fresh from storage every render (NOT useLocalStorage) — this
+  // Provider mounts exactly once for the whole app session, so a cached
+  // useState snapshot would go stale forever the first time a habit is
+  // renamed/deleted from the Habits screen (a totally different
+  // useLocalStorage instance, with no cross-instance reactivity). Cheap:
+  // a personal habit list is tiny, and re-reading costs nothing next to
+  // the once-a-second tick already happening while a session runs.
+  const habits = storage.getHabits();
+  const [, setTimeLogs] = useLocalStorage<HabitTimeLog[]>(storage.keys.habitTimeLogs, []);
   const [notifPermission, setNotifPermission] = useState(getNotifPermission());
 
   const [session, setSessionState] = useState<PomodoroSession>(() => storage.getPomodoroSession());
@@ -78,13 +89,23 @@ export function PomodoroTimerProvider({ children }: { children: ReactNode }) {
       }
       checkAchievements();
       checkObjectiveMissions(missions, setMissions, gainXP, gainAttributes);
+      // Purely a time log for the linked habit — never touches its
+      // completedDates/streak, that still needs its own manual click.
+      if (session.linkedHabitId && storage.getHabits().some(h => h.id === session.linkedHabitId)) {
+        setTimeLogs(prev => [...prev, {
+          id: genId(), habitId: session.linkedHabitId!, minutes: Math.round(mode.workSeconds / 60), date: today, createdAt: new Date().toISOString(),
+        }]);
+      }
     } else {
       setSession(prev => ({ ...prev, isBreak: false, running: false, endsAt: null, remainingSeconds: mode.workSeconds }));
       if (prefs.notifications) {
         showCompletionNotification('Descanso terminado', 'Hora de volver al enfoque');
       }
     }
-  }, [session.isBreak, mode, today, gainXP, gainAttributes, setPomState, setSession, prefs.sound, prefs.notifications, missions, setMissions]);
+  }, [
+    session.isBreak, session.linkedHabitId, mode, today, gainXP, gainAttributes, setPomState, setSession,
+    prefs.sound, prefs.notifications, missions, setMissions, setTimeLogs,
+  ]);
 
   // Interval is torn down and recreated whenever running/endsAt change
   // (start, pause, phase transition) — cheap since it ticks at most once a
@@ -135,6 +156,10 @@ export function PomodoroTimerProvider({ children }: { children: ReactNode }) {
     });
   }, [setSession]);
 
+  const setLinkedHabit = useCallback((id: string | null) => {
+    setSession(prev => ({ ...prev, linkedHabitId: id }));
+  }, [setSession]);
+
   const toggleSound = useCallback(() => {
     setPrefs(p => ({ ...p, sound: !p.sound }));
   }, [setPrefs]);
@@ -155,6 +180,7 @@ export function PomodoroTimerProvider({ children }: { children: ReactNode }) {
   const value: PomodoroTimerValue = {
     mode, modeId: session.modeId, isBreak: session.isBreak, running: session.running, seconds, completedToday,
     prefs, notifPermission, notificationsAvailable: notificationsSupported(),
+    habits, linkedHabitId: session.linkedHabitId, setLinkedHabit,
     start, pause, reset, selectMode, toggleSound, toggleNotifications,
   };
 
