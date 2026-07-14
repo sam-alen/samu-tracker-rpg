@@ -13,7 +13,7 @@ import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useXP } from '../../hooks/useXP';
 import { useAttributes } from '../../hooks/useAttributes';
 import { storage } from '../../lib/storage';
-import { todayISO } from '../../lib/xp';
+import { todayISO, dateToLocalISO } from '../../lib/xp';
 import { XP_REWARDS } from '../../lib/xp';
 import { fx } from '../../lib/fx';
 import { checkAchievements } from '../../lib/achievements';
@@ -30,7 +30,7 @@ function getStreak(habit: Habit): number {
   let streak = 0;
   const d = new Date();
   while (true) {
-    const s = d.toISOString().slice(0, 10);
+    const s = dateToLocalISO(d);
     if (habit.completedDates.includes(s)) {
       streak++;
       d.setDate(d.getDate() - 1);

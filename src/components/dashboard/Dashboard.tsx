@@ -13,7 +13,7 @@ import { Badge } from '../ui/Badge';
 import { useXP } from '../../hooks/useXP';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { storage } from '../../lib/storage';
-import { todayISO, XP_REWARDS } from '../../lib/xp';
+import { todayISO, XP_REWARDS, dateToLocalISO } from '../../lib/xp';
 import { fx } from '../../lib/fx';
 import { checkAchievements, computeStats, getClosestAchievement } from '../../lib/achievements';
 import { pendingTemplatesForToday, instantiateTemplates, dailyMissionsFor } from '../../lib/missions';
@@ -56,7 +56,7 @@ function getLast7Days(): string[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    return d.toISOString().slice(0, 10);
+    return dateToLocalISO(d);
   });
 }
 

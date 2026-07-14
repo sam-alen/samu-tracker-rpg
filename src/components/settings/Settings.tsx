@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { Input, Select } from '../ui/Input';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { storage } from '../../lib/storage';
+import { todayISO } from '../../lib/xp';
 import type { Profile } from '../../types';
 
 export function Settings() {
@@ -26,7 +27,7 @@ export function Settings() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `samu-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `samu-tracker-backup-${todayISO()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     storage.setBackupReminder({ ...storage.getBackupReminder(), lastExportAt: new Date().toISOString() });

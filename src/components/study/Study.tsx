@@ -9,7 +9,7 @@ import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useXP } from '../../hooks/useXP';
 import { useAttributes } from '../../hooks/useAttributes';
 import { storage } from '../../lib/storage';
-import { XP_REWARDS, todayISO } from '../../lib/xp';
+import { XP_REWARDS, todayISO, dateToLocalISO } from '../../lib/xp';
 import { fx } from '../../lib/fx';
 import { checkAchievements } from '../../lib/achievements';
 import type { StudySession, StudyArea, FocusLevel } from '../../types';
@@ -47,7 +47,7 @@ export function Study() {
 
   const weekStart = (() => {
     const d = new Date(); d.setDate(d.getDate() - d.getDay());
-    return d.toISOString().slice(0, 10);
+    return dateToLocalISO(d);
   })();
   const weekMinutes = useMemo(() => sessions.filter(s => s.date >= weekStart).reduce((a, s) => a + s.durationMinutes, 0), [sessions, weekStart]);
 

@@ -53,14 +53,23 @@ export function xpProgress(state: XPState): { current: number; needed: number; p
   return { current: state.total, needed, pct };
 }
 
+/** YYYY-MM-DD anchored to the browser's LOCAL calendar day — never
+ *  `.toISOString()`, which reports the UTC day and silently disagrees with
+ *  the user's actual midnight for any timezone that isn't UTC+0 (a habit
+ *  completed at night could stay "done" for several extra hours the next
+ *  day, or reset several hours early, depending on the offset's sign). */
+export function dateToLocalISO(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return dateToLocalISO(new Date());
 }
 
 function daysAgoISO(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return dateToLocalISO(d);
 }
 
 /** Streaks of at least this length survive ONE missed day (grace bridge) —

@@ -1,5 +1,6 @@
 import { RECOMMENDATION_CATEGORIES, RECOMMENDATION_TYPE_LABELS, RECOMMENDATION_DIFFICULTY_LABELS, RECOMMENDATION_COST_LABELS, genericSearchUrl } from '../data/recommendations';
 import { normalizeUrl } from './url';
+import { todayISO } from './xp';
 import type { RecommendationItem, RecommendationLanguage } from '../types';
 
 // Widened to Set<string> — these validate untrusted, arbitrarily-wide
@@ -106,7 +107,7 @@ export function parseCustomRecommendationJson(raw: string): ImportResult {
     const priority = typeof o.priority === 'number' ? Math.min(5, Math.max(1, Math.round(o.priority))) as 1 | 2 | 3 | 4 | 5 : 3;
     const estimatedRating = typeof o.estimatedRating === 'number' ? Math.min(5, Math.max(0, o.estimatedRating)) : 4;
     const timeMinutes = typeof o.timeMinutes === 'number' && o.timeMinutes > 0 ? Math.round(o.timeMinutes) : 30;
-    const addedOn = new Date().toISOString().slice(0, 10);
+    const addedOn = todayISO();
 
     items.push({
       id,

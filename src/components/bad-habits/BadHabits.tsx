@@ -7,11 +7,8 @@ import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { storage } from '../../lib/storage';
+import { todayISO } from '../../lib/xp';
 import type { BadHabit } from '../../types';
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function streakDays(relapses: string[]): number {
   if (relapses.length === 0) return 0;
