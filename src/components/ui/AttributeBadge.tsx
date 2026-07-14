@@ -18,18 +18,36 @@ export function AttributeBadge({ attr, size = 'sm' }: { attr: RPGAttribute; size
   );
 }
 
-export function AttributePicker({ value, onChange }: { value: RPGAttribute; onChange: (a: RPGAttribute) => void }) {
+export function AttributeBadgeList({ attrs, size = 'sm' }: { attrs: RPGAttribute[]; size?: 'sm' | 'md' }) {
+  return (
+    <div className="flex gap-1 flex-wrap">
+      {attrs.map(a => <AttributeBadge key={a} attr={a} size={size} />)}
+    </div>
+  );
+}
+
+/** Multi-select: click toggles an attribute in/out of `value`. At least one
+ *  must stay selected — clicking the last remaining one is a no-op, since a
+ *  habit/mission with zero attributes has nowhere to send its stat reward. */
+export function AttributePicker({ value, onChange }: { value: RPGAttribute[]; onChange: (a: RPGAttribute[]) => void }) {
   return (
     <div className="flex gap-1.5 flex-wrap">
       {ATTRIBUTES.map(a => {
         const color = ATTRIBUTE_COLORS[a];
-        const active = value === a;
+        const active = value.includes(a);
         const Icon = ATTRIBUTE_ICONS[a];
         return (
           <button
             key={a}
             type="button"
-            onClick={() => onChange(a)}
+            onClick={() => {
+              if (active) {
+                if (value.length === 1) return; // keep at least one selected
+                onChange(value.filter(v => v !== a));
+              } else {
+                onChange([...value, a]);
+              }
+            }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all"
             style={active
               ? { borderColor: color, backgroundColor: `${color}1F`, color }

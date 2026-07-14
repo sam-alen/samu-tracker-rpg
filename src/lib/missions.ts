@@ -1,3 +1,4 @@
+import { resolveAttributes } from './attributes';
 import type { Mission, MissionTemplate } from '../types';
 
 function genId() { return Math.random().toString(36).slice(2, 10); }
@@ -20,7 +21,7 @@ export function instantiateTemplates(templates: MissionTemplate[], today: string
   return templates.map(t => ({
     id: genId(),
     title: t.title,
-    attribute: t.attribute,
+    attributes: resolveAttributes(t, 'DEX'),
     date: today,
     status: 'pending' as const,
     createdAt: today,

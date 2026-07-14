@@ -28,7 +28,7 @@ import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import {
   ATTRIBUTES, ATTRIBUTE_COLORS, ATTRIBUTE_ICONS,
-  applyAttributeXP, defaultAttributes, defaultAttributeXP, totalAttributePoints, getAttributeTier,
+  applyAttributeXP, defaultAttributes, defaultAttributeXP, totalAttributePoints, getAttributeTier, resolveAttributes,
 } from '../../lib/attributes';
 import { motivationalQuotes } from '../../data/initial';
 import type {
@@ -218,6 +218,13 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
     }
   }
 
+  // Habits/missions can build more than one attribute at once (e.g. reading
+  // → WIS + INT) — each gets the FULL delta, not a split (derived stat, not
+  // spendable currency, so no farming risk in stacking attributes).
+  function gainAttributes(attrs: RPGAttribute[], delta: number) {
+    attrs.forEach(a => gainAttribute(a, delta));
+  }
+
   // Un-marking reverts the award (XP, gold, attribute, all-done bonus) so
   // stats stay coherent — same logic as the Hábitos/Misiones sections.
   function toggleHabit(id: string, e?: React.MouseEvent) {
@@ -234,12 +241,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
       : h));
     if (!done) {
       gainXP(XP_REWARDS.habit);
-      gainAttribute(habit.attribute ?? 'INT', XP_REWARDS.habit);
+      gainAttributes(resolveAttributes(habit, 'INT'), XP_REWARDS.habit);
       fx.rewardAt(e ?? null, XP_REWARDS.habit);
       checkAchievements();
     } else {
       loseXP(XP_REWARDS.habit);
-      gainAttribute(habit.attribute ?? 'INT', -XP_REWARDS.habit);
+      gainAttributes(resolveAttributes(habit, 'INT'), -XP_REWARDS.habit);
     }
   }
 
@@ -260,7 +267,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
     setMissions(updated);
     if (nowDone) {
       gainXP(reward);
-      gainAttribute(mission.attribute ?? 'DEX', reward);
+      gainAttributes(resolveAttributes(mission, 'DEX'), reward);
       fx.rewardAt(e ?? null, reward);
       checkAchievements();
       if (!mission.special) {
@@ -276,7 +283,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
       }
     } else {
       loseXP(reward);
-      gainAttribute(mission.attribute ?? 'DEX', -reward);
+      gainAttributes(resolveAttributes(mission, 'DEX'), -reward);
       if (!mission.special && wasAllDone) loseXP(XP_REWARDS.allMissionsBonus);
     }
   }
@@ -454,7 +461,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
             <div className="flex flex-wrap gap-2">
               {habitsScheduledToday.map(h => {
                 const done = h.completedDates.includes(today);
-                const attrColor = ATTRIBUTE_COLORS[h.attribute ?? 'INT'];
+                const attrColor = ATTRIBUTE_COLORS[resolveAttributes(h, 'INT')[0]];
                 return (
                   <button
                     key={h.id}
@@ -505,7 +512,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
             <div className="space-y-1.5">
               {todayMissionList.map(m => {
                 const done = m.status === 'done';
-                const attrColor = ATTRIBUTE_COLORS[m.attribute ?? 'DEX'];
+                const attrColor = ATTRIBUTE_COLORS[resolveAttributes(m, 'DEX')[0]];
                 const diff = getMissionDifficulty(m.difficulty);
                 return (
                   <button

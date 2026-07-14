@@ -39,5 +39,16 @@ export function useAttributes() {
     applyDelta(attr, -amount);
   }
 
-  return { attributes, attributeXP, gainAttribute, loseAttribute };
+  /** Habits/missions can build more than one attribute at once (e.g. reading
+   *  → WIS + INT) — each one gets the FULL amount, not a split, since this
+   *  is a derived stat, not spendable currency. */
+  function gainAttributes(attrs: RPGAttribute[], amount: number) {
+    attrs.forEach(a => applyDelta(a, amount));
+  }
+
+  function loseAttributes(attrs: RPGAttribute[], amount: number) {
+    attrs.forEach(a => applyDelta(a, -amount));
+  }
+
+  return { attributes, attributeXP, gainAttribute, loseAttribute, gainAttributes, loseAttributes };
 }

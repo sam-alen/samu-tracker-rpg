@@ -51,6 +51,19 @@ export function totalAttributePoints(attrs: PlayerAttributes): number {
   return ATTRIBUTES.reduce((sum, a) => sum + (attrs[a] ?? 0), 0);
 }
 
+/** A habit/mission can grant more than one attribute (e.g. reading builds
+ *  both WIS and INT) — `attributes` is the source of truth, `attribute`
+ *  (singular) is the pre-multi-attribute field kept only so old saves keep
+ *  reading correctly. Never falls through to an empty array. */
+export function resolveAttributes(
+  entity: { attributes?: RPGAttribute[]; attribute?: RPGAttribute },
+  fallback: RPGAttribute,
+): RPGAttribute[] {
+  if (entity.attributes?.length) return entity.attributes;
+  if (entity.attribute) return [entity.attribute];
+  return [fallback];
+}
+
 // ─── Attribute XP (nested leveling, one point at a time) ──────────────────
 // Completing something doesn't jump a stat by a whole point — it adds XP
 // toward that attribute, and every ATTRIBUTE_XP_PER_POINT of it converts

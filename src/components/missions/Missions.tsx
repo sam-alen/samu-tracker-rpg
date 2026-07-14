@@ -6,7 +6,7 @@ import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Badge } from '../ui/Badge';
 import { ProgressBar } from '../ui/ProgressBar';
-import { AttributeBadge, AttributePicker } from '../ui/AttributeBadge';
+import { AttributeBadgeList, AttributePicker } from '../ui/AttributeBadge';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useXP } from '../../hooks/useXP';
 import { useAttributes } from '../../hooks/useAttributes';
@@ -21,13 +21,14 @@ import {
   isBossTier, formatEstimatedDays,
 } from '../../lib/missionDifficulty';
 import { initialMissions } from '../../data/initial';
+import { resolveAttributes } from '../../lib/attributes';
 import type { Mission, MissionTemplate, MissionDifficulty, RPGAttribute } from '../../types';
 
 function generateId() { return Math.random().toString(36).slice(2, 10); }
 
 interface FormState {
   title: string;
-  attribute: RPGAttribute;
+  attributes: RPGAttribute[];
   difficulty: MissionDifficulty;
   estimatedDays?: number;
   repeatDaily: boolean;
@@ -36,7 +37,7 @@ interface FormState {
 }
 
 function emptyForm(): FormState {
-  return { title: '', attribute: 'DEX', difficulty: 'normal', estimatedDays: undefined, repeatDaily: false, special: false, deadline: '' };
+  return { title: '', attributes: ['DEX'], difficulty: 'normal', estimatedDays: undefined, repeatDaily: false, special: false, deadline: '' };
 }
 
 function DifficultyPicker({ value, onChange }: { value: MissionDifficulty; onChange: (d: MissionDifficulty) => void }) {
@@ -93,7 +94,7 @@ export function Missions() {
   const [missions, setMissions] = useLocalStorage<Mission[]>(storage.keys.missions, initialMissions);
   const [templates, setTemplates] = useLocalStorage<MissionTemplate[]>(storage.keys.missionTemplates, []);
   const { gainXP, loseXP } = useXP();
-  const { gainAttribute, loseAttribute } = useAttributes();
+  const { gainAttributes, loseAttributes } = useAttributes();
   const today = todayISO();
 
   const [showModal, setShowModal] = useState(false);
@@ -115,7 +116,7 @@ export function Missions() {
     setEditing(m);
     setForm({
       title: m.title,
-      attribute: m.attribute ?? 'DEX',
+      attributes: resolveAttributes(m, 'DEX'),
       difficulty: m.difficulty ?? 'normal',
       estimatedDays: m.estimatedDays,
       repeatDaily: false,
@@ -127,20 +128,20 @@ export function Missions() {
 
   function save() {
     if (!form.title.trim()) return;
-    const { title, attribute, difficulty, estimatedDays, special, deadline } = form;
+    const { title, attributes, difficulty, estimatedDays, special, deadline } = form;
     if (editing) {
       setMissions(prev => prev.map(m => m.id === editing.id
-        ? { ...m, title, attribute, difficulty, estimatedDays, special, deadline: special && deadline ? deadline : undefined }
+        ? { ...m, title, attributes, attribute: undefined, difficulty, estimatedDays, special, deadline: special && deadline ? deadline : undefined }
         : m));
     } else if (form.repeatDaily) {
       const templateId = generateId();
-      setTemplates(prev => [...prev, { id: templateId, title, attribute, difficulty, estimatedDays, active: true, createdAt: today }]);
+      setTemplates(prev => [...prev, { id: templateId, title, attributes, difficulty, estimatedDays, active: true, createdAt: today }]);
       setMissions(prev => [...prev, {
-        id: generateId(), title, attribute, difficulty, estimatedDays, date: today, status: 'pending', createdAt: today, templateId,
+        id: generateId(), title, attributes, difficulty, estimatedDays, date: today, status: 'pending', createdAt: today, templateId,
       }]);
     } else {
       setMissions(prev => [...prev, {
-        id: generateId(), title, attribute, difficulty, estimatedDays, date: today, status: 'pending', createdAt: today,
+        id: generateId(), title, attributes, difficulty, estimatedDays, date: today, status: 'pending', createdAt: today,
         special, deadline: special && deadline ? deadline : undefined,
       }]);
     }
@@ -181,7 +182,7 @@ export function Missions() {
     setMissions(updated);
     if (nowDone) {
       gainXP(reward);
-      gainAttribute(mission.attribute ?? 'DEX', reward);
+      gainAttributes(resolveAttributes(mission, 'DEX'), reward);
       fx.rewardAt(e ?? null, reward);
       checkAchievements();
       if (!mission.special) {
@@ -197,7 +198,7 @@ export function Missions() {
       }
     } else {
       loseXP(reward);
-      loseAttribute(mission.attribute ?? 'DEX', reward);
+      loseAttributes(resolveAttributes(mission, 'DEX'), reward);
       if (!mission.special && wasAllDone) loseXP(XP_REWARDS.allMissionsBonus);
     }
   }
@@ -209,7 +210,7 @@ export function Missions() {
     if (mission?.status === 'done') {
       const reward = mission.xpAwarded ?? missionXPReward(mission.difficulty);
       loseXP(reward);
-      loseAttribute(mission.attribute ?? 'DEX', reward);
+      loseAttributes(resolveAttributes(mission, 'DEX'), reward);
     }
   }
 
@@ -296,7 +297,7 @@ export function Missions() {
                 </span>
               )}
 
-              <AttributeBadge attr={m.attribute ?? 'DEX'} />
+              <AttributeBadgeList attrs={resolveAttributes(m, 'DEX')} />
 
               <div className="flex items-center gap-1">
                 <button onClick={() => openEdit(m)} className="p-1.5 text-gray-600 hover:text-gray-300 transition-colors">
@@ -366,7 +367,7 @@ export function Missions() {
                     <span className="text-xs text-gold-200 font-semibold">+{missionXPReward(m.difficulty)}</span>
                   </div>
 
-                  <AttributeBadge attr={m.attribute ?? 'DEX'} />
+                  <AttributeBadgeList attrs={resolveAttributes(m, 'DEX')} />
 
                   <div className="flex items-center gap-1">
                     <button onClick={() => openEdit(m)} className="p-1.5 text-gray-600 hover:text-gray-300 transition-colors">
@@ -396,7 +397,7 @@ export function Missions() {
                 >
                   {t.active ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
                 </button>
-                <AttributeBadge attr={t.attribute ?? 'DEX'} />
+                <AttributeBadgeList attrs={resolveAttributes(t, 'DEX')} />
                 <p className={`flex-1 text-sm truncate ${t.active ? 'text-gray-200' : 'text-gray-600 line-through'}`}>{t.title}</p>
                 <button onClick={() => removeTemplate(t.id)} className="p-1.5 text-gray-600 hover:text-red-400 transition-colors">
                   <Trash2 size={13} />
@@ -417,8 +418,8 @@ export function Missions() {
             autoFocus
           />
           <div>
-            <p className="block text-xs font-medium text-gray-400 mb-1.5 tracking-wide">Atributo que desarrolla</p>
-            <AttributePicker value={form.attribute} onChange={a => setForm(p => ({ ...p, attribute: a }))} />
+            <p className="block text-xs font-medium text-gray-400 mb-1.5 tracking-wide">Atributos que desarrolla</p>
+            <AttributePicker value={form.attributes} onChange={attrs => setForm(p => ({ ...p, attributes: attrs }))} />
           </div>
           <div>
             <p className="block text-xs font-medium text-gray-400 mb-1.5 tracking-wide">

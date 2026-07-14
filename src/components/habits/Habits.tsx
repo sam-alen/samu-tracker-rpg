@@ -8,7 +8,7 @@ import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Badge } from '../ui/Badge';
 import { ProgressBar } from '../ui/ProgressBar';
-import { AttributeBadge, AttributePicker } from '../ui/AttributeBadge';
+import { AttributeBadgeList, AttributePicker } from '../ui/AttributeBadge';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useXP } from '../../hooks/useXP';
 import { useAttributes } from '../../hooks/useAttributes';
@@ -19,6 +19,7 @@ import { fx } from '../../lib/fx';
 import { checkAchievements } from '../../lib/achievements';
 import { normalizeUrl } from '../../lib/url';
 import { DAY_LABELS, DAY_LABELS_FULL, ALL_DAYS, WEEKDAYS, isHabitScheduledOnDate } from '../../lib/habits';
+import { resolveAttributes } from '../../lib/attributes';
 import { initialHabits } from '../../data/initial';
 import type { Habit, RPGAttribute } from '../../types';
 
@@ -97,25 +98,25 @@ function DayScheduleBadge({ days }: { days: number[] }) {
 export function Habits() {
   const [habits, setHabits] = useLocalStorage<Habit[]>(storage.keys.habits, initialHabits);
   const { gainXP, loseXP } = useXP();
-  const { gainAttribute, loseAttribute } = useAttributes();
+  const { gainAttributes, loseAttributes } = useAttributes();
   const today = todayISO();
 
   const [tab, setTab] = useState<'daily' | 'avoid'>('daily');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Habit | null>(null);
-  const [form, setForm] = useState<{ name: string; icon: string; attribute: RPGAttribute; link: string; activeDays: number[] }>(
-    { name: '', icon: '✅', attribute: 'INT', link: '', activeDays: ALL_DAYS },
+  const [form, setForm] = useState<{ name: string; icon: string; attributes: RPGAttribute[]; link: string; activeDays: number[] }>(
+    { name: '', icon: '✅', attributes: ['INT'], link: '', activeDays: ALL_DAYS },
   );
 
   function openNew() {
     setEditing(null);
-    setForm({ name: '', icon: '✅', attribute: 'INT', link: '', activeDays: ALL_DAYS });
+    setForm({ name: '', icon: '✅', attributes: ['INT'], link: '', activeDays: ALL_DAYS });
     setShowModal(true);
   }
 
   function openEdit(h: Habit) {
     setEditing(h);
-    setForm({ name: h.name, icon: h.icon, attribute: h.attribute ?? 'INT', link: h.link ?? '', activeDays: h.activeDays?.length ? h.activeDays : ALL_DAYS });
+    setForm({ name: h.name, icon: h.icon, attributes: resolveAttributes(h, 'INT'), link: h.link ?? '', activeDays: h.activeDays?.length ? h.activeDays : ALL_DAYS });
     setShowModal(true);
   }
 
@@ -124,13 +125,13 @@ export function Habits() {
     const link = form.link.trim() ? normalizeUrl(form.link) : undefined;
     const activeDays = form.activeDays.length > 0 ? form.activeDays : ALL_DAYS;
     if (editing) {
-      setHabits(prev => prev.map(h => h.id === editing.id ? { ...h, name: form.name, icon: form.icon, attribute: form.attribute, link, activeDays } : h));
+      setHabits(prev => prev.map(h => h.id === editing.id ? { ...h, name: form.name, icon: form.icon, attributes: form.attributes, attribute: undefined, link, activeDays } : h));
     } else {
       const newHabit: Habit = {
         id: generateId(),
         name: form.name,
         icon: form.icon,
-        attribute: form.attribute,
+        attributes: form.attributes,
         completedDates: [],
         createdAt: today,
         link,
@@ -161,12 +162,12 @@ export function Habits() {
       : h));
     if (!done) {
       gainXP(XP_REWARDS.habit);
-      gainAttribute(habit.attribute ?? 'INT', XP_REWARDS.habit);
+      gainAttributes(resolveAttributes(habit, 'INT'), XP_REWARDS.habit);
       fx.rewardAt(e ?? null, XP_REWARDS.habit);
       checkAchievements();
     } else {
       loseXP(XP_REWARDS.habit);
-      loseAttribute(habit.attribute ?? 'INT', XP_REWARDS.habit);
+      loseAttributes(resolveAttributes(habit, 'INT'), XP_REWARDS.habit);
     }
   }
 
@@ -269,7 +270,7 @@ export function Habits() {
 
               <DayScheduleBadge days={h.activeDays?.length ? h.activeDays : ALL_DAYS} />
 
-              <AttributeBadge attr={h.attribute ?? 'INT'} />
+              <AttributeBadgeList attrs={resolveAttributes(h, 'INT')} />
 
               <div className="flex items-center gap-1">
                 {h.link && (
@@ -301,8 +302,8 @@ export function Habits() {
           <Input label="Emoji / Icono" value={form.icon} onChange={e => setForm(p => ({ ...p, icon: e.target.value }))} placeholder="✅" />
           <Input label="Nombre del hábito" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Ej: Leer 20 minutos" autoFocus />
           <div>
-            <p className="block text-xs font-medium text-gray-400 mb-1.5 tracking-wide">Atributo que desarrolla</p>
-            <AttributePicker value={form.attribute} onChange={a => setForm(p => ({ ...p, attribute: a }))} />
+            <p className="block text-xs font-medium text-gray-400 mb-1.5 tracking-wide">Atributos que desarrolla</p>
+            <AttributePicker value={form.attributes} onChange={attrs => setForm(p => ({ ...p, attributes: attrs }))} />
           </div>
           <div>
             <p className="block text-xs font-medium text-gray-400 mb-1.5 tracking-wide">Qué días se lleva a cabo</p>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, RotateCcw, Plus, Trash2, ExternalLink, Timer, Coffee } from 'lucide-react';
+import { Play, Pause, RotateCcw, Plus, Trash2, ExternalLink, Timer, Coffee, Volume2, VolumeX, Bell, BellOff } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
@@ -12,7 +12,11 @@ import { XP_REWARDS, todayISO } from '../../lib/xp';
 import { fx } from '../../lib/fx';
 import { checkAchievements } from '../../lib/achievements';
 import { initialFocusLinks } from '../../data/initial';
-import type { FocusLink, FocusLinkCategory, PomodoroState } from '../../types';
+import {
+  playCompletionSound, showCompletionNotification, notificationsSupported,
+  notificationPermission, requestNotificationPermission,
+} from '../../lib/pomodoroAlert';
+import type { FocusLink, FocusLinkCategory, PomodoroState, PomodoroPrefs } from '../../types';
 
 function genId() { return Math.random().toString(36).slice(2, 10); }
 
@@ -70,6 +74,8 @@ const CAT_COLORS: Record<FocusLinkCategory, 'blue' | 'green' | 'purple' | 'gray'
 export function Pomodoro() {
   const [pomState, setPomState] = useLocalStorage<PomodoroState>(storage.keys.pomodoro, { completedToday: 0, lastDate: '' });
   const [links, setLinks] = useLocalStorage<FocusLink[]>(storage.keys.focusLinks, initialFocusLinks);
+  const [prefs, setPrefs] = useLocalStorage<PomodoroPrefs>(storage.keys.pomodoroPrefs, { sound: true, notifications: false });
+  const [notifPermission, setNotifPermission] = useState(notificationPermission());
   const { gainXP } = useXP();
   const today = todayISO();
 
@@ -107,6 +113,7 @@ export function Pomodoro() {
 
   const handleComplete = useCallback(() => {
     stop();
+    if (prefs.sound) playCompletionSound();
     if (!isBreak) {
       gainXP(mode.xp);
       setPomState({ completedToday: completedToday + 1, lastDate: today, totalCompleted: (pomState.totalCompleted ?? 0) + 1 });
@@ -118,12 +125,18 @@ export function Pomodoro() {
         title: 'Sesión de enfoque completada',
         subtitle: `${mode.label} de trabajo profundo · ahora toca descansar`,
       });
+      if (prefs.notifications) {
+        showCompletionNotification('Sesión de enfoque completada', `${mode.label} de trabajo profundo · +${mode.xp} XP · ahora toca descansar`);
+      }
       checkAchievements();
     } else {
       setIsBreak(false);
       setSeconds(mode.workSeconds);
+      if (prefs.notifications) {
+        showCompletionNotification('Descanso terminado', 'Hora de volver al enfoque');
+      }
     }
-  }, [isBreak, mode, completedToday, today, gainXP, setPomState, stop, pomState.totalCompleted]);
+  }, [isBreak, mode, completedToday, today, gainXP, setPomState, stop, pomState.totalCompleted, prefs.sound, prefs.notifications]);
 
   // handleComplete fires from the timer's own tick callback — a genuine
   // external-system callback, not a setState updater (StrictMode-safe,
@@ -155,6 +168,23 @@ export function Pomodoro() {
     setModeId(id);
   }
 
+  function toggleSound() {
+    setPrefs(p => ({ ...p, sound: !p.sound }));
+  }
+
+  // Turning notifications ON requests browser permission — must happen from
+  // this click's own call stack (a real user gesture), never on page load.
+  // If the user denies it, the toggle stays off (nothing to fire silently).
+  async function toggleNotifications() {
+    if (prefs.notifications) {
+      setPrefs(p => ({ ...p, notifications: false }));
+      return;
+    }
+    const perm = await requestNotificationPermission();
+    setNotifPermission(perm);
+    if (perm === 'granted') setPrefs(p => ({ ...p, notifications: true }));
+  }
+
   const total = isBreak ? mode.breakSeconds : mode.workSeconds;
   const pct = ((total - seconds) / total) * 100;
   const circum = 2 * Math.PI * 54;
@@ -182,7 +212,36 @@ export function Pomodoro() {
 
   return (
     <div className="space-y-6">
-      <p className="text-xs text-gray-500">Elige tu modo de enfoque y trabaja sin distracciones</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs text-gray-500">Elige tu modo de enfoque y trabaja sin distracciones</p>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={toggleSound}
+            title={prefs.sound ? 'Sonido activado — clic para silenciar' : 'Sonido silenciado — clic para activar'}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all
+              ${prefs.sound ? 'border-gold-600/50 bg-gold-900/30 text-gold-200' : 'border-[#1B2A47] text-gray-500 hover:text-gray-300'}`}
+          >
+            {prefs.sound ? <Volume2 size={13} /> : <VolumeX size={13} />}
+            Sonido
+          </button>
+          <button
+            onClick={toggleNotifications}
+            disabled={!notificationsSupported() || notifPermission === 'denied'}
+            title={
+              !notificationsSupported() ? 'Tu navegador no soporta notificaciones'
+              : notifPermission === 'denied' ? 'Bloqueaste las notificaciones para este sitio — habilítalas desde los ajustes del navegador'
+              : prefs.notifications ? 'Notificaciones activadas — clic para desactivar'
+              : 'Clic para pedir permiso y activar notificaciones'
+            }
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all
+              ${prefs.notifications ? 'border-arcane-600/50 bg-arcane-900/30 text-arcane-200' : 'border-[#1B2A47] text-gray-500 hover:text-gray-300'}
+              ${(!notificationsSupported() || notifPermission === 'denied') ? 'opacity-40 cursor-not-allowed' : ''}`}
+          >
+            {prefs.notifications ? <Bell size={13} /> : <BellOff size={13} />}
+            Notificaciones
+          </button>
+        </div>
+      </div>
 
       {/* Mode selector */}
       <div className="grid grid-cols-3 gap-3">

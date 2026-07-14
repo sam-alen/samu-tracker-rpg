@@ -12,6 +12,7 @@ const KEYS = {
   studySessions: 'rpg_study',
   focusLinks: 'rpg_focus_links',
   pomodoro: 'rpg_pomodoro',
+  pomodoroPrefs: 'rpg_pomodoro_prefs',
   transactions: 'rpg_transactions',
   recurringExpenses: 'rpg_recurring_expenses',
   financeAccounts: 'rpg_finance_accounts',
@@ -97,6 +98,9 @@ export const storage = {
   getPomodoro: () => get<AppState['pomodoro']>(KEYS.pomodoro, { completedToday: 0, lastDate: '' }),
   setPomodoro: (v: AppState['pomodoro']) => set(KEYS.pomodoro, v),
 
+  getPomodoroPrefs: () => get<AppState['pomodoroPrefs']>(KEYS.pomodoroPrefs, { sound: true, notifications: false }),
+  setPomodoroPrefs: (v: AppState['pomodoroPrefs']) => set(KEYS.pomodoroPrefs, v),
+
   getTransactions: () => get<AppState['transactions']>(KEYS.transactions, []),
   setTransactions: (v: AppState['transactions']) => set(KEYS.transactions, v),
 
@@ -164,6 +168,7 @@ export const storage = {
       studySessions: this.getStudySessions(),
       focusLinks: this.getFocusLinks(),
       pomodoro: this.getPomodoro(),
+      pomodoroPrefs: this.getPomodoroPrefs(),
       transactions: this.getTransactions(),
       recurringExpenses: this.getRecurringExpenses(),
       financeAccounts: this.getFinanceAccounts(),
@@ -197,6 +202,7 @@ export const storage = {
     if (data.studySessions) this.setStudySessions(data.studySessions);
     if (data.focusLinks) this.setFocusLinks(data.focusLinks);
     if (data.pomodoro) this.setPomodoro(data.pomodoro);
+    if (data.pomodoroPrefs) this.setPomodoroPrefs(data.pomodoroPrefs);
     if (data.transactions) this.setTransactions(data.transactions);
     if (data.recurringExpenses) this.setRecurringExpenses(data.recurringExpenses);
     if (data.financeAccounts) this.setFinanceAccounts(data.financeAccounts);

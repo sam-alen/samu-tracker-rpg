@@ -57,7 +57,14 @@ export interface Habit {
   icon: string;
   completedDates: string[]; // ISO date strings
   createdAt: string;
-  /** May be missing in old saves — default to a fallback attribute when reading */
+  /** One or more attributes this habit builds (e.g. reading → WIS + INT).
+   *  Each selected attribute gets the FULL reward, not a split — it's a
+   *  cosmetic/derived stat, not spendable currency, so there's no exploit
+   *  risk in a habit legitimately building more than one trait at once. */
+  attributes?: RPGAttribute[];
+  /** @deprecated superseded by `attributes` — kept only so saves from before
+   *  multi-attribute support keep reading correctly. Never written anymore;
+   *  read via `resolveAttributes()` in lib/attributes.ts. */
   attribute?: RPGAttribute;
   /** Optional related link (e.g. the platform you study on) — quick-access button on the habit row */
   link?: string;
@@ -82,7 +89,9 @@ export interface Mission {
   date: string; // YYYY-MM-DD – the day this mission belongs to (creation day for special missions)
   status: MissionStatus;
   createdAt: string;
-  /** May be missing in old saves — default to a fallback attribute when reading */
+  /** One or more attributes this mission builds — see Habit.attributes */
+  attributes?: RPGAttribute[];
+  /** @deprecated superseded by `attributes` — see Habit.attribute */
   attribute?: RPGAttribute;
   /** Present if this instance was generated from a MissionTemplate */
   templateId?: string;
@@ -107,6 +116,9 @@ export interface Mission {
 export interface MissionTemplate {
   id: string;
   title: string;
+  /** One or more attributes this recurring mission builds — see Habit.attributes */
+  attributes?: RPGAttribute[];
+  /** @deprecated superseded by `attributes` — see Habit.attribute */
   attribute?: RPGAttribute;
   active: boolean;
   createdAt: string;
@@ -159,6 +171,15 @@ export interface PomodoroState {
    *  exists in the UI for a finished pomodoro — always append-only). May be
    *  missing in old saves — treat as 0. */
   totalCompleted?: number;
+}
+
+/** Alert preferences, separate from PomodoroState (a settings object, not
+ *  daily-counter state). Sound needs no permission so defaults on;
+ *  notifications require a browser permission prompt so default off until
+ *  the user explicitly opts in. */
+export interface PomodoroPrefs {
+  sound: boolean;
+  notifications: boolean;
 }
 
 // ─── Finances ────────────────────────────────────────────────────────────────
@@ -488,6 +509,7 @@ export interface AppState {
   studySessions: StudySession[];
   focusLinks: FocusLink[];
   pomodoro: PomodoroState;
+  pomodoroPrefs: PomodoroPrefs;
   transactions: Transaction[];
   recurringExpenses: RecurringExpense[];
   financeAccounts: FinanceAccounts;
