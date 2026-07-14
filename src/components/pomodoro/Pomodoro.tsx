@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { Play, Pause, RotateCcw, Plus, Trash2, ExternalLink, Timer, Coffee, Volume2, VolumeX, Bell, BellOff } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -6,63 +6,13 @@ import { Modal } from '../ui/Modal';
 import { Input, Select } from '../ui/Input';
 import { Badge } from '../ui/Badge';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { useXP } from '../../hooks/useXP';
+import { usePomodoroTimer } from '../../hooks/pomodoroTimerContext';
+import { MODES } from '../../lib/pomodoroModes';
 import { storage } from '../../lib/storage';
-import { XP_REWARDS, todayISO } from '../../lib/xp';
-import { fx } from '../../lib/fx';
-import { checkAchievements } from '../../lib/achievements';
 import { initialFocusLinks } from '../../data/initial';
-import {
-  playCompletionSound, showCompletionNotification, notificationsSupported,
-  notificationPermission, requestNotificationPermission,
-} from '../../lib/pomodoroAlert';
-import type { FocusLink, FocusLinkCategory, PomodoroState, PomodoroPrefs } from '../../types';
+import type { FocusLink, FocusLinkCategory } from '../../types';
 
 function genId() { return Math.random().toString(36).slice(2, 10); }
-
-interface SessionMode {
-  id: '25' | '50' | '120';
-  label: string;
-  sublabel: string;
-  workSeconds: number;
-  breakSeconds: number;
-  xp: number;
-  color: string;
-  ringColor: string;
-}
-
-const MODES: SessionMode[] = [
-  {
-    id: '25',
-    label: '25 min',
-    sublabel: 'Pomodoro clásico',
-    workSeconds: 25 * 60,
-    breakSeconds: 5 * 60,
-    xp: XP_REWARDS.pomodoro25,
-    color: 'border-arcane-600/50 bg-arcane-900/25 text-arcane-300 shadow-[0_0_10px_rgba(139,92,246,0.15)]',
-    ringColor: '#8B5CF6',
-  },
-  {
-    id: '50',
-    label: '50 min',
-    sublabel: 'Trabajo profundo',
-    workSeconds: 50 * 60,
-    breakSeconds: 10 * 60,
-    xp: XP_REWARDS.pomodoro50,
-    color: 'border-gold-600/50 bg-gold-900/40 text-gold-200 shadow-[0_0_10px_rgba(77,166,255,0.15)]',
-    ringColor: '#4DA6FF',
-  },
-  {
-    id: '120',
-    label: '2 horas',
-    sublabel: 'Modo flow',
-    workSeconds: 120 * 60,
-    breakSeconds: 20 * 60,
-    xp: XP_REWARDS.pomodoro120,
-    color: 'border-orange-600/50 bg-orange-950/30 text-orange-300 shadow-[0_0_10px_rgba(232,133,61,0.15)]',
-    ringColor: '#E8853D',
-  },
-];
 
 const CAT_LABELS: Record<FocusLinkCategory, string> = {
   focus: 'Focus', gym: 'Gym', worship: 'Worship', ambient: 'Ambient', anime: 'Anime', dev: 'Dev',
@@ -72,118 +22,11 @@ const CAT_COLORS: Record<FocusLinkCategory, 'blue' | 'green' | 'purple' | 'gray'
 };
 
 export function Pomodoro() {
-  const [pomState, setPomState] = useLocalStorage<PomodoroState>(storage.keys.pomodoro, { completedToday: 0, lastDate: '' });
   const [links, setLinks] = useLocalStorage<FocusLink[]>(storage.keys.focusLinks, initialFocusLinks);
-  const [prefs, setPrefs] = useLocalStorage<PomodoroPrefs>(storage.keys.pomodoroPrefs, { sound: true, notifications: false });
-  const [notifPermission, setNotifPermission] = useState(notificationPermission());
-  const { gainXP } = useXP();
-  const today = todayISO();
-
-  const completedToday = pomState.lastDate === today ? pomState.completedToday : 0;
-
-  const [modeId, setModeId] = useState<SessionMode['id']>('25');
-  const [isBreak, setIsBreak] = useState(false);
-  const [running, setRunning] = useState(false);
-
-  const mode = MODES.find(m => m.id === modeId)!;
-  const [seconds, setSeconds] = useState(mode.workSeconds);
-
-  // When mode changes (and not running), reset the timer
-  const prevModeRef = useRef(modeId);
-  useEffect(() => {
-    if (prevModeRef.current !== modeId) {
-      prevModeRef.current = modeId;
-      setIsBreak(false);
-      setSeconds(mode.workSeconds);
-      setRunning(false);
-    }
-  }, [modeId, mode.workSeconds]);
-
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Mirrors `seconds` for the interval tick to read/decrement without a
-  // stale closure — the tick callback is the only writer during a run.
-  const secondsRef = useRef(seconds);
-  useEffect(() => { secondsRef.current = seconds; }, [seconds]);
-
-  const stop = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = null;
-    setRunning(false);
-  }, []);
-
-  const handleComplete = useCallback(() => {
-    stop();
-    if (prefs.sound) playCompletionSound();
-    if (!isBreak) {
-      gainXP(mode.xp);
-      setPomState({ completedToday: completedToday + 1, lastDate: today, totalCompleted: (pomState.totalCompleted ?? 0) + 1 });
-      setIsBreak(true);
-      setSeconds(mode.breakSeconds);
-      fx.rewardAt(null, mode.xp);
-      fx.emit({
-        kind: 'banner',
-        title: 'Sesión de enfoque completada',
-        subtitle: `${mode.label} de trabajo profundo · ahora toca descansar`,
-      });
-      if (prefs.notifications) {
-        showCompletionNotification('Sesión de enfoque completada', `${mode.label} de trabajo profundo · +${mode.xp} XP · ahora toca descansar`);
-      }
-      checkAchievements();
-    } else {
-      setIsBreak(false);
-      setSeconds(mode.workSeconds);
-      if (prefs.notifications) {
-        showCompletionNotification('Descanso terminado', 'Hora de volver al enfoque');
-      }
-    }
-  }, [isBreak, mode, completedToday, today, gainXP, setPomState, stop, pomState.totalCompleted, prefs.sound, prefs.notifications]);
-
-  // handleComplete fires from the timer's own tick callback — a genuine
-  // external-system callback, not a setState updater (StrictMode-safe,
-  // no double XP) and not an effect body reacting to state (lint-safe).
-  useEffect(() => {
-    if (!running) return;
-    intervalRef.current = setInterval(() => {
-      const next = secondsRef.current - 1;
-      if (next <= 0) {
-        secondsRef.current = 0;
-        setSeconds(0);
-        handleComplete();
-      } else {
-        secondsRef.current = next;
-        setSeconds(next);
-      }
-    }, 1000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running, handleComplete]);
-
-  function reset() {
-    stop();
-    setIsBreak(false);
-    setSeconds(mode.workSeconds);
-  }
-
-  function selectMode(id: SessionMode['id']) {
-    if (running) return; // block mode change while running
-    setModeId(id);
-  }
-
-  function toggleSound() {
-    setPrefs(p => ({ ...p, sound: !p.sound }));
-  }
-
-  // Turning notifications ON requests browser permission — must happen from
-  // this click's own call stack (a real user gesture), never on page load.
-  // If the user denies it, the toggle stays off (nothing to fire silently).
-  async function toggleNotifications() {
-    if (prefs.notifications) {
-      setPrefs(p => ({ ...p, notifications: false }));
-      return;
-    }
-    const perm = await requestNotificationPermission();
-    setNotifPermission(perm);
-    if (perm === 'granted') setPrefs(p => ({ ...p, notifications: true }));
-  }
+  const {
+    mode, modeId, isBreak, running, seconds, completedToday, prefs, notifPermission, notificationsAvailable,
+    start, pause, reset, selectMode, toggleSound, toggleNotifications,
+  } = usePomodoroTimer();
 
   const total = isBreak ? mode.breakSeconds : mode.workSeconds;
   const pct = ((total - seconds) / total) * 100;
@@ -208,8 +51,6 @@ export function Pomodoro() {
 
   function removeLink(id: string) { setLinks(prev => prev.filter(l => l.id !== id)); }
 
-  const breakLabel = mode.id === '25' ? '5 min' : mode.id === '50' ? '10 min' : '20 min';
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -226,16 +67,16 @@ export function Pomodoro() {
           </button>
           <button
             onClick={toggleNotifications}
-            disabled={!notificationsSupported() || notifPermission === 'denied'}
+            disabled={!notificationsAvailable || notifPermission === 'denied'}
             title={
-              !notificationsSupported() ? 'Tu navegador no soporta notificaciones'
+              !notificationsAvailable ? 'Tu navegador no soporta notificaciones'
               : notifPermission === 'denied' ? 'Bloqueaste las notificaciones para este sitio — habilítalas desde los ajustes del navegador'
               : prefs.notifications ? 'Notificaciones activadas — clic para desactivar'
               : 'Clic para pedir permiso y activar notificaciones'
             }
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all
               ${prefs.notifications ? 'border-arcane-600/50 bg-arcane-900/30 text-arcane-200' : 'border-[#1B2A47] text-gray-500 hover:text-gray-300'}
-              ${(!notificationsSupported() || notifPermission === 'denied') ? 'opacity-40 cursor-not-allowed' : ''}`}
+              ${(!notificationsAvailable || notifPermission === 'denied') ? 'opacity-40 cursor-not-allowed' : ''}`}
           >
             {prefs.notifications ? <Bell size={13} /> : <BellOff size={13} />}
             Notificaciones
@@ -270,7 +111,7 @@ export function Pomodoro() {
           {/* Status badge */}
           <div className="flex items-center gap-2">
             {isBreak
-              ? <Badge color="green"><Coffee size={11} className="inline mr-1" />Descanso · {breakLabel}</Badge>
+              ? <Badge color="green"><Coffee size={11} className="inline mr-1" />Descanso · {mode.breakLabel}</Badge>
               : <Badge color={mode.id === '25' ? 'purple' : mode.id === '50' ? 'gold' : 'red'}>
                   🎯 {mode.sublabel}
                 </Badge>
@@ -306,7 +147,7 @@ export function Pomodoro() {
             <Button
               variant="primary"
               size="lg"
-              onClick={() => setRunning(r => !r)}
+              onClick={running ? pause : start}
               className="min-w-[110px]"
               style={!running ? { backgroundColor: mode.ringColor, borderColor: mode.ringColor } : {}}
             >
@@ -343,7 +184,7 @@ export function Pomodoro() {
                 <span className="text-gray-600">— {m.sublabel}</span>
               </div>
               <div className="flex items-center gap-3 text-gray-500">
-                <span>Descanso: {m.id === '25' ? '5min' : m.id === '50' ? '10min' : '20min'}</span>
+                <span>Descanso: {m.breakLabel}</span>
                 <span style={{ color: m.ringColor }}>+{m.xp} XP</span>
               </div>
             </div>

@@ -2,6 +2,11 @@ import type { AppState } from '../types';
 import { defaultAttributes, defaultAttributeXP } from './attributes';
 import { defaultRecommendationProfile } from '../data/recommendationProfile';
 import { defaultCategoryAffinity } from '../data/recommendations';
+import { MODES } from './pomodoroModes';
+
+function defaultPomodoroSession(): AppState['pomodoroSession'] {
+  return { modeId: '25', isBreak: false, running: false, endsAt: null, remainingSeconds: MODES[0].workSeconds };
+}
 
 const KEYS = {
   profile: 'rpg_profile',
@@ -13,6 +18,7 @@ const KEYS = {
   focusLinks: 'rpg_focus_links',
   pomodoro: 'rpg_pomodoro',
   pomodoroPrefs: 'rpg_pomodoro_prefs',
+  pomodoroSession: 'rpg_pomodoro_session',
   transactions: 'rpg_transactions',
   recurringExpenses: 'rpg_recurring_expenses',
   financeAccounts: 'rpg_finance_accounts',
@@ -101,6 +107,9 @@ export const storage = {
   getPomodoroPrefs: () => get<AppState['pomodoroPrefs']>(KEYS.pomodoroPrefs, { sound: true, notifications: false }),
   setPomodoroPrefs: (v: AppState['pomodoroPrefs']) => set(KEYS.pomodoroPrefs, v),
 
+  getPomodoroSession: () => get<AppState['pomodoroSession']>(KEYS.pomodoroSession, defaultPomodoroSession()),
+  setPomodoroSession: (v: AppState['pomodoroSession']) => set(KEYS.pomodoroSession, v),
+
   getTransactions: () => get<AppState['transactions']>(KEYS.transactions, []),
   setTransactions: (v: AppState['transactions']) => set(KEYS.transactions, v),
 
@@ -169,6 +178,7 @@ export const storage = {
       focusLinks: this.getFocusLinks(),
       pomodoro: this.getPomodoro(),
       pomodoroPrefs: this.getPomodoroPrefs(),
+      pomodoroSession: this.getPomodoroSession(),
       transactions: this.getTransactions(),
       recurringExpenses: this.getRecurringExpenses(),
       financeAccounts: this.getFinanceAccounts(),
@@ -203,6 +213,7 @@ export const storage = {
     if (data.focusLinks) this.setFocusLinks(data.focusLinks);
     if (data.pomodoro) this.setPomodoro(data.pomodoro);
     if (data.pomodoroPrefs) this.setPomodoroPrefs(data.pomodoroPrefs);
+    if (data.pomodoroSession) this.setPomodoroSession(data.pomodoroSession);
     if (data.transactions) this.setTransactions(data.transactions);
     if (data.recurringExpenses) this.setRecurringExpenses(data.recurringExpenses);
     if (data.financeAccounts) this.setFinanceAccounts(data.financeAccounts);

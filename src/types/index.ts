@@ -182,6 +182,27 @@ export interface PomodoroPrefs {
   notifications: boolean;
 }
 
+export type PomodoroModeId = '25' | '50' | '120';
+
+/** Live countdown state, owned by a Context provider mounted once at the app
+ *  root (see hooks/usePomodoroTimer.tsx) instead of by the Pomodoro screen
+ *  itself — this is what lets a running session survive navigating to a
+ *  different section without resetting. Persisted to localStorage too, so
+ *  even a full page reload doesn't lose it. */
+export interface PomodoroSession {
+  modeId: PomodoroModeId;
+  isBreak: boolean;
+  running: boolean;
+  /** Epoch ms when the current phase ends — set only while running. The
+   *  countdown is always derived from this against the real clock (never a
+   *  plain per-tick decrement), so it can't drift even if the tab is
+   *  backgrounded and the browser throttles its timers. */
+  endsAt: number | null;
+  /** Authoritative remaining seconds while paused/idle; ignored while running
+   *  (derive from `endsAt` instead). */
+  remainingSeconds: number;
+}
+
 // ─── Finances ────────────────────────────────────────────────────────────────
 
 export type TransactionType = 'income' | 'expense';
@@ -510,6 +531,7 @@ export interface AppState {
   focusLinks: FocusLink[];
   pomodoro: PomodoroState;
   pomodoroPrefs: PomodoroPrefs;
+  pomodoroSession: PomodoroSession;
   transactions: Transaction[];
   recurringExpenses: RecurringExpense[];
   financeAccounts: FinanceAccounts;

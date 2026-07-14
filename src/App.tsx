@@ -14,6 +14,8 @@ import { Rewards } from './components/rewards/Rewards';
 import { MonthlyReview } from './components/monthly-review/MonthlyReview';
 import { Settings } from './components/settings/Settings';
 import { Projects } from './components/projects/Projects';
+import { PomodoroTimerProvider } from './hooks/usePomodoroTimer';
+import { PomodoroFloatingBadge } from './components/pomodoro/PomodoroFloatingBadge';
 import type { NavSection } from './components/layout/Sidebar';
 
 export default function App() {
@@ -35,18 +37,21 @@ export default function App() {
   };
 
   return (
-    <div className="app-bg flex h-screen overflow-hidden">
-      <Sidebar active={active} onChange={setActive} />
+    <PomodoroTimerProvider>
+      <div className="app-bg flex h-screen overflow-hidden">
+        <Sidebar active={active} onChange={setActive} />
 
-      <main className="flex-1 overflow-y-auto">
-        {/* key re-mounts the wrapper per section so the entrance animation replays */}
-        <div key={active} className="rise-in max-w-3xl mx-auto px-4 pt-6 pb-24 md:pb-8">
-          {SECTIONS[active]}
-        </div>
-      </main>
+        <main className="flex-1 overflow-y-auto">
+          {/* key re-mounts the wrapper per section so the entrance animation replays */}
+          <div key={active} className="rise-in max-w-3xl mx-auto px-4 pt-6 pb-24 md:pb-8">
+            {SECTIONS[active]}
+          </div>
+        </main>
 
-      <BottomNav active={active} onChange={setActive} />
-      <FxLayer />
-    </div>
+        <BottomNav active={active} onChange={setActive} />
+        <FxLayer />
+        {active !== 'focus' && <PomodoroFloatingBadge onOpen={() => setActive('focus')} />}
+      </div>
+    </PomodoroTimerProvider>
   );
 }
