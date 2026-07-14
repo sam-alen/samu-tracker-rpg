@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Edit2, Trash2, Check, Flame, CheckSquare, ShieldOff } from 'lucide-react';
+import { Plus, Edit2, Trash2, Check, Flame, CheckSquare, ShieldOff, ExternalLink, Minus } from 'lucide-react';
 import { Card, SectionHeader } from '../ui/Card';
 import { Tabs } from '../ui/Tabs';
 import { BadHabits } from '../bad-habits/BadHabits';
@@ -17,6 +17,8 @@ import { todayISO } from '../../lib/xp';
 import { XP_REWARDS } from '../../lib/xp';
 import { fx } from '../../lib/fx';
 import { checkAchievements } from '../../lib/achievements';
+import { normalizeUrl } from '../../lib/url';
+import { DAY_LABELS, DAY_LABELS_FULL, ALL_DAYS, WEEKDAYS, isHabitScheduledOnDate } from '../../lib/habits';
 import { initialHabits } from '../../data/initial';
 import type { Habit, RPGAttribute } from '../../types';
 
@@ -37,6 +39,61 @@ function getStreak(habit: Habit): number {
   return streak;
 }
 
+function toggleDay(days: number[], day: number): number[] {
+  return days.includes(day) ? days.filter(d => d !== day) : [...days, day].sort();
+}
+
+function DayPicker({ value, onChange }: { value: number[]; onChange: (days: number[]) => void }) {
+  const everyDay = value.length === 7;
+  return (
+    <div>
+      <div className="flex gap-1.5 mb-2">
+        {DAY_LABELS.map((label, i) => {
+          const active = value.includes(i);
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onChange(toggleDay(value, i))}
+              title={DAY_LABELS_FULL[i]}
+              className={`w-8 h-8 rounded-lg text-xs font-bold border transition-all
+                ${active ? 'bg-gold-900/40 border-gold-500/60 text-gold-200' : 'border-[#2B4066] text-gray-600 hover:text-gray-300'}`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => onChange(ALL_DAYS)} className={`text-[11px] px-2 py-1 rounded-md border transition-colors ${everyDay ? 'border-gold-500/50 text-gold-300' : 'border-[#2B4066] text-gray-500 hover:text-gray-300'}`}>
+          Todos los días
+        </button>
+        <button type="button" onClick={() => onChange(WEEKDAYS)} className="text-[11px] px-2 py-1 rounded-md border border-[#2B4066] text-gray-500 hover:text-gray-300 transition-colors">
+          Lun–Vie
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Compact read-only schedule display on a habit row — omitted entirely for
+ *  every-day habits since that's the assumed default and needs no callout. */
+function DayScheduleBadge({ days }: { days: number[] }) {
+  if (days.length === 7) return null;
+  return (
+    <div className="flex gap-0.5 shrink-0">
+      {DAY_LABELS.map((label, i) => (
+        <span
+          key={i}
+          className={`w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold ${days.includes(i) ? 'bg-gold-900/50 text-gold-300' : 'bg-black/20 text-gray-700'}`}
+        >
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function Habits() {
   const [habits, setHabits] = useLocalStorage<Habit[]>(storage.keys.habits, initialHabits);
   const { gainXP, loseXP } = useXP();
@@ -46,24 +103,28 @@ export function Habits() {
   const [tab, setTab] = useState<'daily' | 'avoid'>('daily');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Habit | null>(null);
-  const [form, setForm] = useState<{ name: string; icon: string; attribute: RPGAttribute }>({ name: '', icon: '✅', attribute: 'INT' });
+  const [form, setForm] = useState<{ name: string; icon: string; attribute: RPGAttribute; link: string; activeDays: number[] }>(
+    { name: '', icon: '✅', attribute: 'INT', link: '', activeDays: ALL_DAYS },
+  );
 
   function openNew() {
     setEditing(null);
-    setForm({ name: '', icon: '✅', attribute: 'INT' });
+    setForm({ name: '', icon: '✅', attribute: 'INT', link: '', activeDays: ALL_DAYS });
     setShowModal(true);
   }
 
   function openEdit(h: Habit) {
     setEditing(h);
-    setForm({ name: h.name, icon: h.icon, attribute: h.attribute ?? 'INT' });
+    setForm({ name: h.name, icon: h.icon, attribute: h.attribute ?? 'INT', link: h.link ?? '', activeDays: h.activeDays?.length ? h.activeDays : ALL_DAYS });
     setShowModal(true);
   }
 
   function save() {
     if (!form.name.trim()) return;
+    const link = form.link.trim() ? normalizeUrl(form.link) : undefined;
+    const activeDays = form.activeDays.length > 0 ? form.activeDays : ALL_DAYS;
     if (editing) {
-      setHabits(prev => prev.map(h => h.id === editing.id ? { ...h, name: form.name, icon: form.icon, attribute: form.attribute } : h));
+      setHabits(prev => prev.map(h => h.id === editing.id ? { ...h, name: form.name, icon: form.icon, attribute: form.attribute, link, activeDays } : h));
     } else {
       const newHabit: Habit = {
         id: generateId(),
@@ -72,6 +133,8 @@ export function Habits() {
         attribute: form.attribute,
         completedDates: [],
         createdAt: today,
+        link,
+        activeDays,
       };
       setHabits(prev => [...prev, newHabit]);
     }
@@ -107,7 +170,19 @@ export function Habits() {
     }
   }
 
-  const doneToday = habits.filter(h => h.completedDates.includes(today)).length;
+  // Only habits scheduled for today count toward "today's" progress — a
+  // Mon–Fri gym habit shouldn't drag the weekend percentage down for a day
+  // it was never meant to run on.
+  const scheduledToday = habits.filter(h => isHabitScheduledOnDate(h, today));
+  const doneToday = scheduledToday.filter(h => h.completedDates.includes(today)).length;
+
+  // Scheduled-today habits first, then the rest (still visible for
+  // management/editing, just not completable until their day comes around).
+  const sortedHabits = [...habits].sort((a, b) => {
+    const aToday = isHabitScheduledOnDate(a, today);
+    const bToday = isHabitScheduledOnDate(b, today);
+    return aToday === bToday ? 0 : aToday ? -1 : 1;
+  });
 
   return (
     <div className="space-y-6">
@@ -135,10 +210,10 @@ export function Habits() {
       {/* Progress */}
       <Card>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-sm text-gray-300">Hoy: <span className="text-white font-semibold">{doneToday}/{habits.length}</span></p>
-          <Badge color={doneToday === habits.length && habits.length > 0 ? 'green' : 'gray'}>{Math.round((doneToday / Math.max(1, habits.length)) * 100)}%</Badge>
+          <p className="text-sm text-gray-300">Hoy: <span className="text-white font-semibold">{doneToday}/{scheduledToday.length}</span></p>
+          <Badge color={doneToday === scheduledToday.length && scheduledToday.length > 0 ? 'green' : 'gray'}>{Math.round((doneToday / Math.max(1, scheduledToday.length)) * 100)}%</Badge>
         </div>
-        <ProgressBar value={(doneToday / Math.max(1, habits.length)) * 100} color="green" />
+        <ProgressBar value={(doneToday / Math.max(1, scheduledToday.length)) * 100} color="green" />
       </Card>
 
       {/* Habit list */}
@@ -148,41 +223,67 @@ export function Habits() {
             <p className="text-gray-500 text-sm">No hay hábitos. Crea el primero.</p>
           </Card>
         )}
-        {habits.map(h => {
+        {sortedHabits.map(h => {
           const done = h.completedDates.includes(today);
+          const scheduled = isHabitScheduledOnDate(h, today);
           const streak = getStreak(h);
           return (
             <div
               key={h.id}
               className={`flex items-center gap-3 p-4 rounded-xl border transition-all duration-150
-                ${done
-                  ? 'bg-emerald-950/20 border-emerald-800/30 shadow-[inset_2px_0_0_rgba(52,192,139,0.5)]'
-                  : 'bg-gradient-to-b from-[#0C1424] to-[#080D19] border-[#1B2A47] hover:border-gold-400/30'}`}
+                ${!scheduled
+                  ? 'bg-[#080D19]/60 border-[#1B2A47]/60 opacity-55'
+                  : done
+                    ? 'bg-emerald-950/20 border-emerald-800/30 shadow-[inset_2px_0_0_rgba(52,192,139,0.5)]'
+                    : 'bg-gradient-to-b from-[#0C1424] to-[#080D19] border-[#1B2A47] hover:border-gold-400/30'}`}
             >
-              {/* Checkbox */}
-              <button
-                onClick={e => toggle(h.id, e)}
-                className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all active:scale-90
-                  ${done ? 'bg-emerald-600 border-emerald-400 shadow-[0_0_8px_rgba(52,192,139,0.4)]' : 'border-gray-600 hover:border-gold-400'}`}
-              >
-                {done && <Check size={14} className="text-white" />}
-              </button>
+              {/* Checkbox — disabled entirely on days this habit isn't scheduled */}
+              {scheduled ? (
+                <button
+                  onClick={e => toggle(h.id, e)}
+                  className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all active:scale-90
+                    ${done ? 'bg-emerald-600 border-emerald-400 shadow-[0_0_8px_rgba(52,192,139,0.4)]' : 'border-gray-600 hover:border-gold-400'}`}
+                >
+                  {done && <Check size={14} className="text-white" />}
+                </button>
+              ) : (
+                <span title="No programado hoy" className="w-8 h-8 rounded-lg border-2 border-gray-800 flex items-center justify-center shrink-0">
+                  <Minus size={12} className="text-gray-700" />
+                </span>
+              )}
 
               <span className="text-xl">{h.icon}</span>
 
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${done ? 'text-emerald-300 line-through opacity-70' : 'text-gray-200'}`}>{h.name}</p>
-                {streak > 0 && (
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <Flame size={11} className="text-orange-400" />
-                    <span className="text-xs text-orange-400">{streak}d racha</span>
-                  </div>
-                )}
+                <p className={`text-sm font-medium ${done ? 'text-emerald-300 line-through opacity-70' : scheduled ? 'text-gray-200' : 'text-gray-500'}`}>{h.name}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {streak > 0 && (
+                    <div className="flex items-center gap-1">
+                      <Flame size={11} className="text-orange-400" />
+                      <span className="text-xs text-orange-400">{streak}d racha</span>
+                    </div>
+                  )}
+                  {!scheduled && <span className="text-[10px] text-gray-600">No programado hoy</span>}
+                </div>
               </div>
+
+              <DayScheduleBadge days={h.activeDays?.length ? h.activeDays : ALL_DAYS} />
 
               <AttributeBadge attr={h.attribute ?? 'INT'} />
 
               <div className="flex items-center gap-1">
+                {h.link && (
+                  <a
+                    href={h.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    title="Abrir enlace relacionado"
+                    className="p-1.5 text-arcane-400 hover:text-arcane-200 transition-colors"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                )}
                 <button onClick={() => openEdit(h)} className="p-1.5 text-gray-600 hover:text-gray-300 transition-colors">
                   <Edit2 size={14} />
                 </button>
@@ -203,6 +304,16 @@ export function Habits() {
             <p className="block text-xs font-medium text-gray-400 mb-1.5 tracking-wide">Atributo que desarrolla</p>
             <AttributePicker value={form.attribute} onChange={a => setForm(p => ({ ...p, attribute: a }))} />
           </div>
+          <div>
+            <p className="block text-xs font-medium text-gray-400 mb-1.5 tracking-wide">Qué días se lleva a cabo</p>
+            <DayPicker value={form.activeDays} onChange={days => setForm(p => ({ ...p, activeDays: days }))} />
+          </div>
+          <Input
+            label="Enlace relacionado (opcional)"
+            value={form.link}
+            onChange={e => setForm(p => ({ ...p, link: e.target.value }))}
+            placeholder="Ej: la plataforma donde estudias este hábito"
+          />
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="ghost" onClick={() => setShowModal(false)}>Cancelar</Button>
             <Button variant="primary" onClick={save}>Guardar</Button>

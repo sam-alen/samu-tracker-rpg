@@ -10,20 +10,10 @@ import { Tabs } from '../ui/Tabs';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { storage } from '../../lib/storage';
 import { todayISO } from '../../lib/xp';
+import { normalizeUrl, displayUrl } from '../../lib/url';
 import type { SavedLink, LinkCategory } from '../../types';
 
 function genId() { return Math.random().toString(36).slice(2, 10); }
-
-/** Prefix a bare domain/path with https:// so saved links are always clickable */
-function normalizeUrl(url: string): string {
-  const trimmed = url.trim();
-  if (!trimmed) return trimmed;
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
-
-function displayUrl(url: string): string {
-  return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
-}
 
 const CATEGORIES: { id: LinkCategory; label: string; icon: React.ReactNode }[] = [
   { id: 'personal', label: 'Personal', icon: <User size={15} /> },

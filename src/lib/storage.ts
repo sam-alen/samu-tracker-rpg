@@ -23,6 +23,7 @@ const KEYS = {
   customRecommendations: 'rpg_custom_recommendations',
   recommendationsProgress: 'rpg_recommendations_progress',
   savedLinks: 'rpg_saved_links',
+  quickLinks: 'rpg_quick_links',
   unlockedAchievements: 'rpg_unlocked_achievements',
   recommendationProfile: 'rpg_recommendation_profile',
   recommendationInteractions: 'rpg_recommendation_interactions',
@@ -128,6 +129,9 @@ export const storage = {
   getSavedLinks: () => get<AppState['savedLinks']>(KEYS.savedLinks, []),
   setSavedLinks: (v: AppState['savedLinks']) => set(KEYS.savedLinks, v),
 
+  getQuickLinks: () => get<AppState['quickLinks']>(KEYS.quickLinks, []),
+  setQuickLinks: (v: AppState['quickLinks']) => set(KEYS.quickLinks, v),
+
   getUnlockedAchievements: () => get<AppState['unlockedAchievements']>(KEYS.unlockedAchievements, []),
   setUnlockedAchievements: (v: AppState['unlockedAchievements']) => set(KEYS.unlockedAchievements, v),
 
@@ -167,6 +171,7 @@ export const storage = {
       customRecommendations: this.getCustomRecommendations(),
       recommendationsProgress: this.getRecommendationsProgress(),
       savedLinks: this.getSavedLinks(),
+      quickLinks: this.getQuickLinks(),
       unlockedAchievements: this.getUnlockedAchievements(),
       recommendationProfile: this.getRecommendationProfile(),
       recommendationInteractions: this.getRecommendationInteractions(),
@@ -198,6 +203,7 @@ export const storage = {
     if (data.customRecommendations) this.setCustomRecommendations(data.customRecommendations);
     if (data.recommendationsProgress) this.setRecommendationsProgress(data.recommendationsProgress);
     if (data.savedLinks) this.setSavedLinks(data.savedLinks);
+    if (data.quickLinks) this.setQuickLinks(data.quickLinks);
     if (data.unlockedAchievements) this.setUnlockedAchievements(data.unlockedAchievements);
     if (data.recommendationProfile) this.setRecommendationProfile(data.recommendationProfile);
     if (data.recommendationInteractions) this.setRecommendationInteractions(data.recommendationInteractions);

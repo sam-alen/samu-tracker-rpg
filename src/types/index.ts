@@ -59,6 +59,12 @@ export interface Habit {
   createdAt: string;
   /** May be missing in old saves — default to a fallback attribute when reading */
   attribute?: RPGAttribute;
+  /** Optional related link (e.g. the platform you study on) — quick-access button on the habit row */
+  link?: string;
+  /** Days of week this habit runs: 0=domingo..6=sábado (matches Date.getDay()).
+   *  Missing or empty = every day (backward compatible with habits created
+   *  before this field existed). */
+  activeDays?: number[];
 }
 
 // ─── Missions ───────────────────────────────────────────────────────────────
@@ -450,6 +456,18 @@ export interface SavedLink {
   createdAt: string;
 }
 
+// ─── Dashboard quick links ───────────────────────────────────────────────────
+
+/** A user-configured shortcut shown on the Dashboard for one-click access to
+ *  tools/sites used daily — distinct from the categorized SavedLink library. */
+export interface QuickLink {
+  id: string;
+  title: string;
+  url: string;
+  icon: string; // emoji, user-chosen (same lightweight pattern as Habit.icon)
+  createdAt: string;
+}
+
 // ─── Backup reminder ───────────────────────────────────────────────────────────
 
 export interface BackupReminderState {
@@ -485,6 +503,7 @@ export interface AppState {
   recommendationAffinity: CategoryAffinity;
   recommendationWeeklyPlan: RecommendationWeeklyPlan | null;
   savedLinks: SavedLink[];
+  quickLinks: QuickLink[];
   unlockedAchievements: string[];
   backupReminder: BackupReminderState;
 }

@@ -3,6 +3,7 @@ import {
   Flame, Zap, Trophy, BookOpen, Wallet, ShieldCheck,
   Target, User, TrendingUp, ChevronRight, Star, Coins, Check, Sparkles, Repeat,
   ChevronLeft, ChevronRight as ChevronRightIcon, Calendar, DatabaseBackup, X,
+  Link2, Plus, ExternalLink, Trash2,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -21,6 +22,10 @@ import { STREAK_GRACE_MIN } from '../../lib/xp';
 import { getRank, getNextRank, getStreakTitle, getTotalXP, getRankProgress } from '../../lib/titles';
 import { computeHunterPower, getHunterRank, getNextHunterRank, getHunterRankProgress } from '../../lib/hunterRank';
 import { shouldShowBackupReminder } from '../../lib/backupReminder';
+import { normalizeUrl, displayUrl } from '../../lib/url';
+import { DAY_LABELS, habitsScheduledOnDate } from '../../lib/habits';
+import { Modal } from '../ui/Modal';
+import { Input } from '../ui/Input';
 import {
   ATTRIBUTES, ATTRIBUTE_COLORS, ATTRIBUTE_ICONS,
   applyAttributeXP, defaultAttributes, defaultAttributeXP, totalAttributePoints, getAttributeTier,
@@ -29,8 +34,10 @@ import { motivationalQuotes } from '../../data/initial';
 import type {
   Profile, Habit, Mission, MissionTemplate, StudySession, Transaction, PomodoroState,
   BadHabit, RPGAttribute, PlayerAttributes, AttributeXP,
-  Book, Project, MonthlyReview, Reward, FinanceAccounts,
+  Book, Project, MonthlyReview, Reward, FinanceAccounts, QuickLink,
 } from '../../types';
+
+function genId() { return Math.random().toString(36).slice(2, 10); }
 
 function getDayGreeting(): string {
   const h = new Date().getHours();
@@ -53,7 +60,6 @@ function getLast7Days(): string[] {
   });
 }
 
-const DAY_LABELS = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
 
 export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void }) {
   const { xp, gainXP, loseXP, progress } = useXP();
@@ -77,6 +83,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
   const [financeAccounts] = useLocalStorage<FinanceAccounts>(storage.keys.financeAccounts, { account: 0, savings: 0, history: [] });
   const [unlockedAchievements] = useLocalStorage<string[]>(storage.keys.unlockedAchievements, []);
   const [backupReminder, setBackupReminder] = useLocalStorage(storage.keys.backupReminder, storage.getBackupReminder());
+  const [quickLinks, setQuickLinks] = useLocalStorage<QuickLink[]>(storage.keys.quickLinks, []);
 
   const today = todayISO();
   const last7 = useMemo(() => getLast7Days(), []);
@@ -114,10 +121,13 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
   const hunterProgress = getHunterRankProgress(hunterPower);
 
   // ─── Today stats ───────────────────────────────────────────────────────────
+  // Only habits scheduled for today's day of week count — a Mon–Fri gym
+  // habit shouldn't drag the weekend completion % down.
+  const habitsScheduledToday = useMemo(() => habitsScheduledOnDate(habits, today), [habits, today]);
   const habitsToday = useMemo(() => ({
-    done: habits.filter(h => h.completedDates.includes(today)).length,
-    total: habits.length,
-  }), [habits, today]);
+    done: habitsScheduledToday.filter(h => h.completedDates.includes(today)).length,
+    total: habitsScheduledToday.length,
+  }), [habitsScheduledToday, today]);
 
   const missionsToday = useMemo(() => {
     const ms = missions.filter(m => m.date === today);
@@ -438,11 +448,11 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
             />
           </div>
         </div>
-        {habits.length === 0
-          ? <p className="text-xs text-gray-600">Sin hábitos creados.</p>
+        {habitsScheduledToday.length === 0
+          ? <p className="text-xs text-gray-600">{habits.length === 0 ? 'Sin hábitos creados.' : 'Ningún hábito programado para hoy.'}</p>
           : (
             <div className="flex flex-wrap gap-2">
-              {habits.map(h => {
+              {habitsScheduledToday.map(h => {
                 const done = h.completedDates.includes(today);
                 const attrColor = ATTRIBUTE_COLORS[h.attribute ?? 'INT'];
                 return (
@@ -535,6 +545,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (s: NavSection) => void
           )
         }
       </Card>
+
+      {/* ── Quick links ──────────────────────────────────────────────────── */}
+      <QuickLinksCard links={quickLinks} onChange={setQuickLinks} />
 
       {/* ── Backup reminder ─────────────────────────────────────────────── */}
       {showBackupReminder && (
@@ -790,8 +803,9 @@ function MonthCalendar({ habits, missions }: { habits: Habit[]; missions: Missio
   }, [offset]);
 
   function dayStats(date: string) {
-    const habitsTotal = habits.length;
-    const habitsDone = habits.filter(h => h.completedDates.includes(date)).length;
+    const scheduled = habitsScheduledOnDate(habits, date);
+    const habitsTotal = scheduled.length;
+    const habitsDone = scheduled.filter(h => h.completedDates.includes(date)).length;
     const dayMissions = missions.filter(m => m.date === date);
     const missionsDone = dayMissions.filter(m => m.status === 'done').length;
     const total = habitsTotal + dayMissions.length;
@@ -819,7 +833,6 @@ function MonthCalendar({ habits, missions }: { habits: Habit[]; missions: Missio
     return 'text-red-500';
   }
 
-  const DOW_LABELS = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
 
   return (
     <Card>
@@ -855,7 +868,7 @@ function MonthCalendar({ habits, missions }: { habits: Habit[]; missions: Missio
 
       {/* Day of week headers */}
       <div className="grid grid-cols-7 mb-1">
-        {DOW_LABELS.map(d => (
+        {DAY_LABELS.map(d => (
           <div key={d} className="text-center text-xs text-gray-700 py-1">{d}</div>
         ))}
       </div>
@@ -1062,6 +1075,87 @@ function MiniStat({
       </div>
       <p className="font-display text-lg font-bold text-white leading-none">{value}</p>
       <p className="text-[10px] text-gray-600 leading-none truncate">{sub}</p>
+    </div>
+  );
+}
+
+// ─── Quick links ────────────────────────────────────────────────────────────
+
+function QuickLinksCard({ links, onChange }: { links: QuickLink[]; onChange: (next: QuickLink[]) => void }) {
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({ title: '', url: '', icon: '🔗' });
+
+  function openNew() {
+    setForm({ title: '', url: '', icon: '🔗' });
+    setShowModal(true);
+  }
+
+  function add() {
+    if (!form.title.trim() || !form.url.trim()) return;
+    const link: QuickLink = { id: genId(), title: form.title.trim(), url: normalizeUrl(form.url), icon: form.icon.trim() || '🔗', createdAt: todayISO() };
+    onChange([...links, link]);
+    setShowModal(false);
+  }
+
+  function remove(id: string) {
+    onChange(links.filter(l => l.id !== id));
+  }
+
+  return (
+    <div className="bg-gradient-to-b from-[#0C1424] to-[#080D19] border border-[#1B2A47] rounded-2xl px-5 py-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Link2 size={15} className="text-blue-300" />
+          <p className="text-sm font-medium text-white">Accesos rápidos</p>
+        </div>
+        <button onClick={openNew} title="Agregar acceso rápido" className="text-gray-500 hover:text-gold-300 transition-colors">
+          <Plus size={16} />
+        </button>
+      </div>
+
+      {links.length === 0 ? (
+        <p className="text-xs text-gray-600">Agrega enlaces a las herramientas que usas todos los días.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {links.map(l => (
+            <div
+              key={l.id}
+              className="group flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-lg bg-[#0F1830] border border-[#1B2A47] hover:border-gold-400/40 transition-colors"
+            >
+              <a
+                href={l.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={displayUrl(l.url)}
+                className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white"
+              >
+                <span>{l.icon}</span>
+                {l.title}
+                <ExternalLink size={10} className="text-gray-600" />
+              </a>
+              <button
+                onClick={() => remove(l.id)}
+                title="Eliminar"
+                className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-600 hover:text-red-400 transition-all"
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal open={showModal} onClose={() => setShowModal(false)} title="Nuevo acceso rápido">
+        <div className="space-y-4">
+          <Input label="Emoji / Icono" value={form.icon} onChange={e => setForm(p => ({ ...p, icon: e.target.value }))} placeholder="🔗" />
+          <Input label="Título" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Ej: Trailhead" autoFocus />
+          <Input label="URL" value={form.url} onChange={e => setForm(p => ({ ...p, url: e.target.value }))} placeholder="trailhead.salesforce.com" />
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="ghost" onClick={() => setShowModal(false)}>Cancelar</Button>
+            <Button variant="primary" onClick={add}>Guardar</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
